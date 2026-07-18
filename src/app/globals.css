@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fallbacks por si las variables de next/font aún no cargaron */
+:root {
+  --font-serif: "Cormorant Garamond", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-saint-black text-saint-white font-sans;
+  }
+
+  /* Selección de texto acorde a la marca */
+  ::selection {
+    @apply bg-saint-white text-saint-black;
+  }
+
+  /* Scrollbar sobria en navegadores webkit */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d0d0d;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #262626;
+    border-radius: 9999px;
+  }
+}
+
+@layer components {
+  /* Logo "S A I N T": serif fina y muy espaciada */
+  .brand {
+    @apply font-serif font-light tracking-brand;
+  }
+
+  /* Línea fina de la identidad */
+  .hairline {
+    @apply h-px w-full bg-saint-line;
+  }
+
+  /* Botón principal minimalista */
+  .btn-line {
+    @apply inline-flex items-center justify-center border border-saint-white/70
+           px-8 py-3 text-xs uppercase tracking-wide2 transition-all duration-300
+           ease-smooth hover:bg-saint-white hover:text-saint-black;
+  }
+}
