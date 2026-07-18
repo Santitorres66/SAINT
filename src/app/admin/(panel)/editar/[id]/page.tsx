@@ -31,7 +31,7 @@ export default async function EditarProductoPage({
   return (
     <div>
       <Link
-        href="/admin"
+        href="/admin/productos"
         className="mb-6 inline-block text-sm text-neutral-500 transition hover:text-neutral-900"
       >
         ← Volver a la lista

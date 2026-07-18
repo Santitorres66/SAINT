@@ -7,6 +7,7 @@ export interface Product {
   nombre: string;
   categoria: Categoria;
   precio: number;
+  costo: number; // precio de costo (para calcular ganancia)
   descripcion: string;
   colores: string[];
   talles: string[];
@@ -64,4 +65,73 @@ export interface Order {
   comprador: { nombre?: string; email?: string } | null;
   mp_preference_id: string | null;
   mp_payment_id: string | null;
+}
+
+/* ---------------------- Sistema de gestión ---------------------- */
+
+/** Proveedor. */
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  telefono: string;
+  email: string;
+  cuit: string;
+  notas: string;
+  created_at: string;
+}
+export type ProveedorInput = Omit<Proveedor, "id" | "created_at">;
+
+/** Ítem de una compra a proveedor. */
+export interface CompraItem {
+  product_id: string;
+  nombre: string;
+  cantidad: number;
+  costo_unitario: number;
+}
+
+/** Una compra a un proveedor (suma stock). */
+export interface Compra {
+  id: string;
+  created_at: string;
+  fecha: string;
+  proveedor_id: string | null;
+  total: number;
+  items: CompraItem[];
+  notas: string;
+  /** Nombre del proveedor (se completa al leer con join). */
+  proveedor_nombre?: string | null;
+}
+
+/** Una venta manual (resta stock). Reusa OrderItem para los ítems. */
+export interface VentaManual {
+  id: string;
+  created_at: string;
+  fecha: string;
+  cliente: string;
+  medio_pago: string;
+  total: number;
+  items: OrderItem[];
+  notas: string;
+}
+
+/** Fila unificada para el listado de ventas (online + manual). */
+export interface VentaUnificada {
+  id: string;
+  fecha: string;
+  canal: "online" | "manual";
+  cliente: string;
+  medio_pago: string;
+  estado: string;
+  total: number;
+  items: OrderItem[];
+}
+
+/** Números para el tablero de resumen. */
+export interface DashboardStats {
+  ventasMesTotal: number;
+  ventasMesCantidad: number;
+  comprasMesTotal: number;
+  gananciaMesEstimada: number;
+  productosActivos: number;
+  stockBajo: { id: string; nombre: string; stock: number }[];
 }

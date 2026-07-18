@@ -34,6 +34,7 @@ export default function ProductForm({
     initial?.categoria ?? "buzo",
   );
   const [precio, setPrecio] = useState(String(initial?.precio ?? ""));
+  const [costo, setCosto] = useState(String(initial?.costo ?? ""));
   const [stock, setStock] = useState(String(initial?.stock ?? "0"));
   const [descripcion, setDescripcion] = useState(initial?.descripcion ?? "");
   const [colores, setColores] = useState<string[]>(initial?.colores ?? []);
@@ -74,6 +75,7 @@ export default function ProductForm({
       nombre,
       categoria,
       precio: Number(precio),
+      costo: Number(costo) || 0,
       stock: Number(stock),
       descripcion,
       colores,
@@ -122,7 +124,7 @@ export default function ProductForm({
           />
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2">
           <div>
             <label htmlFor="categoria" className={labelClase}>
               Categoría *
@@ -142,22 +144,6 @@ export default function ProductForm({
           </div>
 
           <div>
-            <label htmlFor="precio" className={labelClase}>
-              Precio (en pesos) *
-            </label>
-            <input
-              id="precio"
-              type="number"
-              min="0"
-              step="1"
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
-              className={inputClase}
-              placeholder="Ej: 45000"
-            />
-          </div>
-
-          <div>
             <label htmlFor="stock" className={labelClase}>
               Stock (unidades) *
             </label>
@@ -173,6 +159,62 @@ export default function ProductForm({
             />
           </div>
         </div>
+
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <label htmlFor="precio" className={labelClase}>
+              Precio de venta (en pesos) *
+            </label>
+            <input
+              id="precio"
+              type="number"
+              min="0"
+              step="1"
+              value={precio}
+              onChange={(e) => setPrecio(e.target.value)}
+              className={inputClase}
+              placeholder="Ej: 45000"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="costo" className={labelClase}>
+              Precio de costo (opcional)
+            </label>
+            <input
+              id="costo"
+              type="number"
+              min="0"
+              step="1"
+              value={costo}
+              onChange={(e) => setCosto(e.target.value)}
+              className={inputClase}
+              placeholder="Ej: 18000"
+            />
+            <p className="mt-1 text-xs text-neutral-400">
+              Lo que te sale comprarlo. Sirve para calcular tu ganancia. Se
+              actualiza solo cuando cargás una compra.
+            </p>
+          </div>
+        </div>
+
+        {/* Ganancia calculada */}
+        {Number(precio) > 0 && Number(costo) > 0 && (
+          <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            Ganancia por unidad:{" "}
+            <strong>${(Number(precio) - Number(costo)).toLocaleString("es-AR")}</strong>
+            {Number(precio) > 0 && (
+              <span className="text-emerald-700">
+                {" "}
+                (
+                {Math.round(
+                  ((Number(precio) - Number(costo)) / Number(precio)) * 100,
+                )}
+                % del precio)
+              </span>
+            )}
+          </div>
+        )}
 
         <div>
           <label htmlFor="descripcion" className={labelClase}>
@@ -356,7 +398,7 @@ export default function ProductForm({
       {/* Acciones */}
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Link
-          href="/admin"
+          href="/admin/productos"
           className="rounded-xl border border-neutral-300 px-6 py-3 font-medium text-neutral-700 transition hover:bg-neutral-100"
         >
           Cancelar

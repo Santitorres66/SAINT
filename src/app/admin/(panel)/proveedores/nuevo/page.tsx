@@ -1,22 +1,19 @@
 import Link from "next/link";
-import ProductForm from "@/components/admin/ProductForm";
+import ProveedorForm from "@/components/admin/ProveedorForm";
 
-/** Página para CREAR un producto nuevo. */
-export default function NuevoProductoPage() {
+export default function NuevoProveedorPage() {
   return (
     <div>
       <Link
-        href="/admin/productos"
+        href="/admin/proveedores"
         className="mb-6 inline-block text-sm text-neutral-500 transition hover:text-neutral-900"
       >
-        ← Volver a la lista
+        ← Volver a proveedores
       </Link>
-
       <h1 className="mb-8 text-2xl font-semibold text-neutral-900">
-        Agregar producto
+        Nuevo proveedor
       </h1>
-
-      <ProductForm />
+      <ProveedorForm />
     </div>
   );
 }

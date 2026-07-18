@@ -20,6 +20,7 @@ function revalidarPublico(id?: string) {
   revalidatePath("/tienda");
   if (id) revalidatePath(`/producto/${id}`);
   revalidatePath("/admin");
+  revalidatePath("/admin/productos");
 }
 
 /** Verifica que haya un admin logueado antes de escribir. */
@@ -65,7 +66,7 @@ export async function createProduct(input: ProductInput): Promise<ActionResult> 
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
   revalidarPublico();
-  redirect("/admin");
+  redirect("/admin/productos");
 }
 
 /** Edita un producto existente. */
@@ -85,6 +86,7 @@ export async function updateProduct(
       nombre: input.nombre.trim(),
       categoria: input.categoria,
       precio: input.precio,
+      costo: input.costo ?? 0,
       descripcion: input.descripcion?.trim() ?? "",
       colores: input.colores ?? [],
       talles: input.talles ?? [],
@@ -97,7 +99,7 @@ export async function updateProduct(
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
   revalidarPublico(id);
-  redirect("/admin");
+  redirect("/admin/productos");
 }
 
 /** Elimina un producto. */
