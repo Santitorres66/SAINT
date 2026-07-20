@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import CartDrawer from "@/components/cart/CartDrawer";
+import WhatsAppFloat from "@/components/WhatsAppFloat";
 import { CartProvider } from "@/lib/cart/CartContext";
 
 /**
@@ -20,6 +21,7 @@ export default function PublicLayout({
         <Footer />
       </div>
       <CartDrawer />
+      <WhatsAppFloat />
     </CartProvider>
   );
 }

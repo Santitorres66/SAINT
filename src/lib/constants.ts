@@ -28,11 +28,20 @@ export const COLORES_SUGERIDOS = [
   "Azul",
 ];
 
-/* --- Enlaces de contacto (placeholders — reemplazar por los reales) --- */
-export const WHATSAPP_NUMERO = "5490000000000"; // sin +, sin espacios
+/* --- Enlaces de contacto --- */
+// Número de WhatsApp en formato internacional, sin +, espacios ni guiones.
+// +54 9 3512 08-1452  →  5493512081452
+export const WHATSAPP_NUMERO = "5493512081452";
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMERO}`;
 export const INSTAGRAM_USER = "saint";
 export const INSTAGRAM_URL = `https://instagram.com/${INSTAGRAM_USER}`;
+
+/** Arma un link de WhatsApp con un mensaje pre-escrito (opcional). */
+export function whatsappLink(mensaje?: string): string {
+  return mensaje
+    ? `${WHATSAPP_URL}?text=${encodeURIComponent(mensaje)}`
+    : WHATSAPP_URL;
+}
 
 /** Bucket de Supabase Storage donde viven las imágenes de productos. */
 export const STORAGE_BUCKET = "productos";
