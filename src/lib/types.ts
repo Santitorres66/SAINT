@@ -42,9 +42,10 @@ export interface CartItem {
   cantidad: number;
 }
 
-/** Un ítem tal como se guarda en la orden. */
+/** Un ítem tal como se guarda en la orden o venta. */
 export interface OrderItem {
-  product_id: string;
+  /** null cuando la venta manual no referencia un producto del sistema. */
+  product_id: string | null;
   nombre: string;
   talle: string | null;
   color: string | null;

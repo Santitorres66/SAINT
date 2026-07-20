@@ -2,12 +2,16 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { Product, OrderItem } from "@/lib/types";
+import type { Product, OrderItem, VentaManual } from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
-import { createVentaManual } from "@/app/admin/gestion-actions";
+import {
+  createVentaManual,
+  updateVentaManual,
+} from "@/app/admin/gestion-actions";
 
 type Linea = {
   product_id: string;
+  nombre: string;
   talle: string;
   color: string;
   cantidad: string;
@@ -16,30 +20,65 @@ type Linea = {
 
 const MEDIOS = ["Efectivo", "Transferencia", "Débito/Crédito", "Otro"];
 
-/** Formulario para registrar una venta manual (resta stock). */
-export default function VentaManualForm({ products }: { products: Product[] }) {
+function itemToLinea(it: OrderItem): Linea {
+  return {
+    product_id: it.product_id ?? "",
+    nombre: it.nombre,
+    talle: it.talle ?? "",
+    color: it.color ?? "",
+    cantidad: String(it.cantidad),
+    precio_unitario: String(it.precio_unitario),
+  };
+}
+
+const LINEA_VACIA: Linea = {
+  product_id: "",
+  nombre: "",
+  talle: "",
+  color: "",
+  cantidad: "1",
+  precio_unitario: "",
+};
+
+/**
+ * Formulario para registrar o EDITAR una venta manual.
+ * Cada ítem puede elegirse de la lista de productos o escribirse a mano.
+ */
+export default function VentaManualForm({
+  products,
+  initial,
+}: {
+  products: Product[];
+  initial?: VentaManual;
+}) {
+  const esEdicion = Boolean(initial);
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const hoy = new Date().toISOString().slice(0, 10);
-  const [cliente, setCliente] = useState("");
-  const [medioPago, setMedioPago] = useState("Efectivo");
-  const [fecha, setFecha] = useState(hoy);
-  const [notas, setNotas] = useState("");
-  const [lineas, setLineas] = useState<Linea[]>([
-    { product_id: "", talle: "", color: "", cantidad: "1", precio_unitario: "" },
-  ]);
+  const [cliente, setCliente] = useState(initial?.cliente ?? "");
+  const [medioPago, setMedioPago] = useState(initial?.medio_pago || "Efectivo");
+  const [fecha, setFecha] = useState(
+    initial?.fecha ? initial.fecha.slice(0, 10) : hoy,
+  );
+  const [notas, setNotas] = useState(initial?.notas ?? "");
+  const [lineas, setLineas] = useState<Linea[]>(
+    initial?.items?.length ? initial.items.map(itemToLinea) : [LINEA_VACIA],
+  );
 
   function actualizar(i: number, campo: keyof Linea, valor: string) {
     setLineas((prev) =>
       prev.map((l, idx) => {
         if (idx !== i) return l;
         const nueva = { ...l, [campo]: valor };
-        if (campo === "product_id") {
+        // Al elegir un producto de la lista, prellenamos nombre y precio
+        if (campo === "product_id" && valor) {
           const prod = products.find((p) => p.id === valor);
-          nueva.precio_unitario = prod ? String(prod.precio) : "";
-          nueva.talle = "";
-          nueva.color = "";
+          if (prod) {
+            nueva.nombre = prod.nombre;
+            if (!nueva.precio_unitario)
+              nueva.precio_unitario = String(prod.precio);
+          }
         }
         return nueva;
       }),
@@ -47,10 +86,7 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
   }
 
   function agregarLinea() {
-    setLineas((prev) => [
-      ...prev,
-      { product_id: "", talle: "", color: "", cantidad: "1", precio_unitario: "" },
-    ]);
+    setLineas((prev) => [...prev, { ...LINEA_VACIA }]);
   }
   function quitarLinea(i: number) {
     setLineas((prev) => prev.filter((_, idx) => idx !== i));
@@ -66,32 +102,33 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
     setError(null);
 
     const items: OrderItem[] = lineas
-      .filter((l) => l.product_id && Number(l.cantidad) > 0)
-      .map((l) => {
-        const prod = products.find((p) => p.id === l.product_id)!;
-        return {
-          product_id: l.product_id,
-          nombre: prod.nombre,
-          talle: l.talle || null,
-          color: l.color || null,
-          cantidad: Number(l.cantidad),
-          precio_unitario: Number(l.precio_unitario) || 0,
-        };
-      });
+      .filter((l) => l.nombre.trim() && Number(l.cantidad) > 0)
+      .map((l) => ({
+        product_id: l.product_id || null,
+        nombre: l.nombre.trim(),
+        talle: l.talle.trim() || null,
+        color: l.color.trim() || null,
+        cantidad: Number(l.cantidad),
+        precio_unitario: Number(l.precio_unitario) || 0,
+      }));
 
     if (!items.length) {
-      setError("Agregá al menos un producto con cantidad.");
+      setError("Agregá al menos un producto (con nombre y cantidad).");
       return;
     }
 
+    const payload = {
+      cliente,
+      medio_pago: medioPago,
+      fecha,
+      items,
+      notas,
+    };
+
     startTransition(async () => {
-      const res = await createVentaManual({
-        cliente,
-        medio_pago: medioPago,
-        fecha,
-        items,
-        notas,
-      });
+      const res = esEdicion
+        ? await updateVentaManual(initial!.id, payload)
+        : await createVentaManual(payload);
       if (res?.error) setError(res.error);
     });
   }
@@ -99,6 +136,8 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
   const labelClase = "mb-1.5 block text-sm font-medium text-neutral-700";
   const inputClase =
     "w-full rounded-lg border border-neutral-300 px-4 py-3 text-base outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10";
+  const inputChico =
+    "w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900";
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
@@ -112,7 +151,7 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
       <section className="grid gap-6 rounded-2xl border border-neutral-200 bg-white p-6 sm:grid-cols-3">
         <div>
           <label htmlFor="cliente" className={labelClase}>
-            Cliente (opcional)
+            Cliente
           </label>
           <input
             id="cliente"
@@ -132,6 +171,10 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
             onChange={(e) => setMedioPago(e.target.value)}
             className={inputClase}
           >
+            {/* Si el medio guardado no está en la lista, lo agregamos */}
+            {!MEDIOS.includes(medioPago) && medioPago && (
+              <option value={medioPago}>{medioPago}</option>
+            )}
             {MEDIOS.map((m) => (
               <option key={m} value={m}>
                 {m}
@@ -160,109 +203,78 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
             Productos vendidos
           </h2>
           <p className="text-sm text-neutral-500">
-            Elegí el producto y la cantidad. Se descuenta del stock
-            automáticamente.
+            Elegí un producto de la lista o escribí el nombre a mano.
           </p>
         </div>
 
-        <div className="space-y-3">
-          {lineas.map((l, i) => {
-            const prod = products.find((p) => p.id === l.product_id);
-            return (
-              <div key={i} className="rounded-xl bg-neutral-50 p-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_90px_130px_40px] sm:items-end">
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-500">
-                      Producto
-                    </label>
-                    <select
-                      value={l.product_id}
-                      onChange={(e) =>
-                        actualizar(i, "product_id", e.target.value)
-                      }
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">— Elegir —</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nombre} (stock {p.stock})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-500">
-                      Cantidad
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={l.cantidad}
-                      onChange={(e) => actualizar(i, "cantidad", e.target.value)}
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-500">
-                      Precio c/u
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={l.precio_unitario}
-                      onChange={(e) =>
-                        actualizar(i, "precio_unitario", e.target.value)
-                      }
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                      placeholder="$"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => quitarLinea(i)}
-                    className="mb-1 h-9 rounded-lg border border-neutral-300 text-neutral-500 transition hover:bg-neutral-200"
-                    aria-label="Quitar"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {/* Talle y color (si el producto los tiene) */}
-                {prod && (prod.talles.length > 0 || prod.colores.length > 0) && (
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    {prod.talles.length > 0 && (
-                      <select
-                        value={l.talle}
-                        onChange={(e) => actualizar(i, "talle", e.target.value)}
-                        className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                      >
-                        <option value="">Talle (opcional)</option>
-                        {prod.talles.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    {prod.colores.length > 0 && (
-                      <select
-                        value={l.color}
-                        onChange={(e) => actualizar(i, "color", e.target.value)}
-                        className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                      >
-                        <option value="">Color (opcional)</option>
-                        {prod.colores.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )}
+        <div className="space-y-4">
+          {lineas.map((l, i) => (
+            <div key={i} className="space-y-3 rounded-xl bg-neutral-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <select
+                  value={l.product_id}
+                  onChange={(e) => actualizar(i, "product_id", e.target.value)}
+                  className={inputChico + " max-w-xs"}
+                >
+                  <option value="">— A mano / sin producto —</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} (stock {p.stock})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => quitarLinea(i)}
+                  className="h-9 w-9 shrink-0 rounded-lg border border-neutral-300 text-neutral-500 transition hover:bg-neutral-200"
+                  aria-label="Quitar"
+                >
+                  ✕
+                </button>
               </div>
-            );
-          })}
+
+              <input
+                value={l.nombre}
+                onChange={(e) => actualizar(i, "nombre", e.target.value)}
+                className={inputChico}
+                placeholder="Nombre del producto (ej. Remera Oversize Verde)"
+              />
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <input
+                  value={l.talle}
+                  onChange={(e) => actualizar(i, "talle", e.target.value)}
+                  className={inputChico}
+                  placeholder="Talle"
+                />
+                <input
+                  value={l.color}
+                  onChange={(e) => actualizar(i, "color", e.target.value)}
+                  className={inputChico}
+                  placeholder="Color"
+                />
+                <input
+                  type="number"
+                  min="1"
+                  value={l.cantidad}
+                  onChange={(e) => actualizar(i, "cantidad", e.target.value)}
+                  className={inputChico}
+                  placeholder="Cant."
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={l.precio_unitario}
+                  onChange={(e) =>
+                    actualizar(i, "precio_unitario", e.target.value)
+                  }
+                  className={inputChico}
+                  placeholder="Precio c/u"
+                />
+              </div>
+            </div>
+          ))}
         </div>
 
         <button
@@ -292,7 +304,7 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
           onChange={(e) => setNotas(e.target.value)}
           rows={2}
           className={inputClase}
-          placeholder="Ej: envío, seña, detalle del bordado…"
+          placeholder="Ej: estado de cobro, envío, detalle del bordado…"
         />
       </section>
 
@@ -308,7 +320,11 @@ export default function VentaManualForm({ products }: { products: Product[] }) {
           disabled={guardando}
           className="rounded-xl bg-neutral-900 px-8 py-3 text-base font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
         >
-          {guardando ? "Guardando…" : "Registrar venta"}
+          {guardando
+            ? "Guardando…"
+            : esEdicion
+              ? "Guardar cambios"
+              : "Registrar venta"}
         </button>
       </div>
     </form>

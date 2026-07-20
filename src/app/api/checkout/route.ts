@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     const result = await preference.create({
       body: {
         items: orderItems.map((i) => ({
-          id: i.product_id,
+          id: i.product_id ?? "",
           title: [i.nombre, i.talle, i.color].filter(Boolean).join(" · "),
           quantity: i.cantidad,
           unit_price: i.precio_unitario,

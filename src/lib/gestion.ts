@@ -57,6 +57,18 @@ export async function getCompras(): Promise<Compra[]> {
 
 /* -------------------------------- Ventas --------------------------------- */
 
+export async function getVentaManualById(
+  id: string,
+): Promise<VentaManual | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ventas")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as VentaManual) ?? null;
+}
+
 export async function getVentasManuales(): Promise<VentaManual[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -171,7 +183,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const gananciaMesEstimada = todosItems.reduce(
     (a, it) =>
       a +
-      (Number(it.precio_unitario) - (costoMap.get(it.product_id) ?? 0)) *
+      (Number(it.precio_unitario) - (costoMap.get(it.product_id ?? "") ?? 0)) *
         Number(it.cantidad),
     0,
   );

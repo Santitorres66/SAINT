@@ -128,6 +128,7 @@ export async function createCompra(input: {
 
   // Sumar stock y actualizar el costo de cada producto
   for (const it of input.items) {
+    if (!it.product_id) continue;
     await supabase.rpc("sumar_stock", {
       p_product_id: it.product_id,
       p_cantidad: it.cantidad,
@@ -155,10 +156,12 @@ export async function deleteCompra(id: string): Promise<ActionResult> {
 
   if (compra?.items) {
     for (const it of compra.items as CompraItem[]) {
-      await supabase.rpc("descontar_stock", {
-        p_product_id: it.product_id,
-        p_cantidad: it.cantidad,
-      });
+      if (it.product_id) {
+        await supabase.rpc("descontar_stock", {
+          p_product_id: it.product_id,
+          p_cantidad: it.cantidad,
+        });
+      }
     }
   }
 
@@ -200,12 +203,81 @@ export async function createVentaManual(input: {
 
   if (error) return { error: `No se pudo guardar la venta: ${error.message}` };
 
-  // Restar stock de cada producto vendido
+  // Restar stock (solo de los ítems que referencian un producto real)
   for (const it of input.items) {
-    await supabase.rpc("descontar_stock", {
-      p_product_id: it.product_id,
-      p_cantidad: it.cantidad,
-    });
+    if (it.product_id) {
+      await supabase.rpc("descontar_stock", {
+        p_product_id: it.product_id,
+        p_cantidad: it.cantidad,
+      });
+    }
+  }
+
+  revalidarGestion();
+  redirect("/admin/ventas");
+}
+
+/** Edita una venta manual. Ajusta el stock según los cambios de ítems. */
+export async function updateVentaManual(
+  id: string,
+  input: {
+    cliente: string;
+    medio_pago: string;
+    fecha: string;
+    items: OrderItem[];
+    notas: string;
+  },
+): Promise<ActionResult> {
+  if (!input.items?.length)
+    return { error: "Agregá al menos un producto a la venta." };
+
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  // Devolvemos al stock lo que la venta anterior había descontado
+  const { data: previa } = await supabase
+    .from("ventas")
+    .select("items")
+    .eq("id", id)
+    .single();
+  if (previa?.items) {
+    for (const it of previa.items as OrderItem[]) {
+      if (it.product_id) {
+        await supabase.rpc("sumar_stock", {
+          p_product_id: it.product_id,
+          p_cantidad: it.cantidad,
+        });
+      }
+    }
+  }
+
+  const total = input.items.reduce(
+    (a, i) => a + i.cantidad * i.precio_unitario,
+    0,
+  );
+
+  const { error } = await supabase
+    .from("ventas")
+    .update({
+      cliente: input.cliente?.trim() ?? "",
+      medio_pago: input.medio_pago?.trim() ?? "",
+      fecha: input.fecha || new Date().toISOString(),
+      total,
+      items: input.items,
+      notas: input.notas?.trim() ?? "",
+    })
+    .eq("id", id);
+
+  if (error) return { error: `No se pudo guardar: ${error.message}` };
+
+  // Descontamos el stock de los ítems nuevos
+  for (const it of input.items) {
+    if (it.product_id) {
+      await supabase.rpc("descontar_stock", {
+        p_product_id: it.product_id,
+        p_cantidad: it.cantidad,
+      });
+    }
   }
 
   revalidarGestion();
@@ -225,10 +297,12 @@ export async function deleteVentaManual(id: string): Promise<ActionResult> {
 
   if (venta?.items) {
     for (const it of venta.items as OrderItem[]) {
-      await supabase.rpc("sumar_stock", {
-        p_product_id: it.product_id,
-        p_cantidad: it.cantidad,
-      });
+      if (it.product_id) {
+        await supabase.rpc("sumar_stock", {
+          p_product_id: it.product_id,
+          p_cantidad: it.cantidad,
+        });
+      }
     }
   }
 
