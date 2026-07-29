@@ -24,6 +24,17 @@ export interface Product {
  */
 export type ProductInput = Omit<Product, "id" | "created_at" | "updated_at">;
 
+/** Stock de una variante (talle + color) de un producto. */
+export interface ProductVariante {
+  id: string;
+  product_id: string;
+  talle: string;
+  color: string;
+  stock: number;
+}
+/** Datos de variante que manda el formulario. */
+export type VarianteInput = { talle: string; color: string; stock: number };
+
 /** Respuesta estándar de las server actions. */
 export type ActionResult = { error?: string; ok?: boolean };
 

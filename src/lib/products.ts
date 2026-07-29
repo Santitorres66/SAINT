@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Product } from "./types";
+import type { Product, ProductVariante } from "./types";
 
 /**
  * Capa de acceso a datos (solo lecturas del lado del servidor).
@@ -52,6 +52,20 @@ export async function getActiveProducts(
     return [];
   }
   return (data as Product[]) ?? [];
+}
+
+/** Variantes (stock por talle+color) de un producto. */
+export async function getProductVariantes(
+  productId: string,
+): Promise<ProductVariante[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("product_variantes")
+    .select("*")
+    .eq("product_id", productId)
+    .order("talle", { ascending: true })
+    .order("color", { ascending: true });
+  return (data as ProductVariante[]) ?? [];
 }
 
 /** Un producto por id (para el detalle público; solo activos por RLS). */

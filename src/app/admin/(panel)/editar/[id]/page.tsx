@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductForm from "@/components/admin/ProductForm";
-import { getProductById } from "@/lib/products";
+import { getProductById, getProductVariantes } from "@/lib/products";
 import { createClient } from "@/lib/supabase/server";
 import type { Product } from "@/lib/types";
 
@@ -28,6 +28,8 @@ export default async function EditarProductoPage({
   const product = (data as Product) ?? (await getProductById(id));
   if (!product) notFound();
 
+  const variantes = await getProductVariantes(id);
+
   return (
     <div>
       <Link
@@ -41,7 +43,7 @@ export default async function EditarProductoPage({
         Editar producto
       </h1>
 
-      <ProductForm initial={product} />
+      <ProductForm initial={product} variantesIniciales={variantes} />
     </div>
   );
 }

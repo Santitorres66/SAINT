@@ -3,7 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { Product, ProductInput, Categoria } from "@/lib/types";
+import type {
+  Product,
+  ProductInput,
+  Categoria,
+  ProductVariante,
+  VarianteInput,
+} from "@/lib/types";
 import {
   CATEGORIAS,
   TALLES_SUGERIDOS,
@@ -19,9 +25,12 @@ import ImageUploader from "./ImageUploader";
  */
 export default function ProductForm({
   initial,
+  variantesIniciales,
 }: {
   /** Si viene, el formulario está en modo edición. */
   initial?: Product;
+  /** Stock por variante existente (en edición). */
+  variantesIniciales?: ProductVariante[];
 }) {
   const router = useRouter();
   const esEdicion = Boolean(initial);
@@ -35,7 +44,14 @@ export default function ProductForm({
   );
   const [precio, setPrecio] = useState(String(initial?.precio ?? ""));
   const [costo, setCosto] = useState(String(initial?.costo ?? ""));
-  const [stock, setStock] = useState(String(initial?.stock ?? "0"));
+  // Stock por variante (talle + color). Clave: `${talle}|||${color}`
+  const [stockVar, setStockVar] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    (variantesIniciales ?? []).forEach((v) => {
+      m[`${v.talle}|||${v.color}`] = String(v.stock);
+    });
+    return m;
+  });
   const [descripcion, setDescripcion] = useState(initial?.descripcion ?? "");
   const [colores, setColores] = useState<string[]>(initial?.colores ?? []);
   const [talles, setTalles] = useState<string[]>(initial?.talles ?? []);
@@ -66,17 +82,35 @@ export default function ProductForm({
     setNuevoTalle("");
   }
 
+  // --- Combinaciones de stock (talle × color) ---
+  const keyVar = (t: string, c: string) => `${t}|||${c}`;
+  const tallesEff = talles.length ? talles : [""];
+  const coloresEff = colores.length ? colores : [""];
+  const combos = tallesEff.flatMap((t) =>
+    coloresEff.map((c) => ({ talle: t, color: c })),
+  );
+  const totalStock = combos.reduce(
+    (a, cmb) => a + (Number(stockVar[keyVar(cmb.talle, cmb.color)]) || 0),
+    0,
+  );
+
   // --- Envío ---
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const variantes: VarianteInput[] = combos.map((c) => ({
+      talle: c.talle,
+      color: c.color,
+      stock: Number(stockVar[keyVar(c.talle, c.color)]) || 0,
+    }));
 
     const input: ProductInput = {
       nombre,
       categoria,
       precio: Number(precio),
       costo: Number(costo) || 0,
-      stock: Number(stock),
+      stock: totalStock,
       descripcion,
       colores,
       talles,
@@ -86,9 +120,9 @@ export default function ProductForm({
 
     startTransition(async () => {
       const res = esEdicion
-        ? await updateProduct(initial!.id, input)
-        : await createProduct(input);
-      // Si hubo error lo mostramos; si salió bien, la action redirige a /admin.
+        ? await updateProduct(initial!.id, input, variantes)
+        : await createProduct(input, variantes);
+      // Si hubo error lo mostramos; si salió bien, la action redirige.
       if (res?.error) setError(res.error);
     });
   }
@@ -124,40 +158,22 @@ export default function ProductForm({
           />
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div>
-            <label htmlFor="categoria" className={labelClase}>
-              Categoría *
-            </label>
-            <select
-              id="categoria"
-              value={categoria}
-              onChange={(e) => setCategoria(e.target.value as Categoria)}
-              className={inputClase}
-            >
-              {CATEGORIAS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="stock" className={labelClase}>
-              Stock (unidades) *
-            </label>
-            <input
-              id="stock"
-              type="number"
-              min="0"
-              step="1"
-              value={stock}
-              onChange={(e) => setStock(e.target.value)}
-              className={inputClase}
-              placeholder="Ej: 10"
-            />
-          </div>
+        <div>
+          <label htmlFor="categoria" className={labelClase}>
+            Categoría *
+          </label>
+          <select
+            id="categoria"
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value as Categoria)}
+            className={inputClase}
+          >
+            {CATEGORIAS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
@@ -360,6 +376,50 @@ export default function ProductForm({
           >
             Agregar
           </button>
+        </div>
+      </section>
+
+      {/* Stock por variante */}
+      <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Stock por talle y color
+          </h2>
+          <p className="text-sm text-neutral-500">
+            Cargá cuántas unidades tenés de cada combinación. El total se calcula
+            solo. (Si agregás/quitás talles o colores, la grilla se actualiza.)
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {combos.map((c) => {
+            const k = keyVar(c.talle, c.color);
+            const etiqueta =
+              [c.talle, c.color].filter(Boolean).join(" · ") || "General";
+            return (
+              <div
+                key={k}
+                className="flex items-center justify-between gap-4 rounded-lg bg-neutral-50 px-4 py-2"
+              >
+                <span className="text-sm text-neutral-700">{etiqueta}</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={stockVar[k] ?? ""}
+                  onChange={(e) =>
+                    setStockVar((prev) => ({ ...prev, [k]: e.target.value }))
+                  }
+                  className="w-28 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                  placeholder="0"
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-neutral-100 pt-3 text-sm">
+          <span className="text-neutral-500">Stock total</span>
+          <span className="font-semibold text-neutral-900">{totalStock} u.</span>
         </div>
       </section>
 

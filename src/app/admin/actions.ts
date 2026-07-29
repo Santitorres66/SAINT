@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { ProductInput, ActionResult } from "@/lib/types";
+import type { ProductInput, ActionResult, VarianteInput } from "@/lib/types";
 
 /**
  * Server Actions del panel admin: crear, editar, borrar y activar/desactivar.
@@ -44,26 +44,49 @@ function validar(input: ProductInput): string | null {
 }
 
 /** Crea un producto nuevo. */
-export async function createProduct(input: ProductInput): Promise<ActionResult> {
+export async function createProduct(
+  input: ProductInput,
+  variantes: VarianteInput[] = [],
+): Promise<ActionResult> {
   const problema = validar(input);
   if (problema) return { error: problema };
 
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
 
-  const { error } = await supabase.from("products").insert({
-    nombre: input.nombre.trim(),
-    categoria: input.categoria,
-    precio: input.precio,
-    descripcion: input.descripcion?.trim() ?? "",
-    colores: input.colores ?? [],
-    talles: input.talles ?? [],
-    imagenes: input.imagenes ?? [],
-    stock: input.stock,
-    activo: input.activo,
-  });
+  const total = variantes.reduce((a, v) => a + (v.stock || 0), 0);
 
-  if (error) return { error: `No se pudo guardar: ${error.message}` };
+  const { data: prod, error } = await supabase
+    .from("products")
+    .insert({
+      nombre: input.nombre.trim(),
+      categoria: input.categoria,
+      precio: input.precio,
+      costo: input.costo ?? 0,
+      descripcion: input.descripcion?.trim() ?? "",
+      colores: input.colores ?? [],
+      talles: input.talles ?? [],
+      imagenes: input.imagenes ?? [],
+      stock: total,
+      activo: input.activo,
+    })
+    .select("id")
+    .single();
+
+  if (error || !prod) return { error: `No se pudo guardar: ${error?.message}` };
+
+  if (variantes.length) {
+    const { error: vErr } = await supabase.from("product_variantes").insert(
+      variantes.map((v) => ({
+        product_id: prod.id,
+        talle: v.talle,
+        color: v.color,
+        stock: v.stock,
+      })),
+    );
+    if (vErr)
+      return { error: `Producto creado, pero falló el stock: ${vErr.message}` };
+  }
 
   revalidarPublico();
   redirect("/admin/productos");
@@ -73,12 +96,15 @@ export async function createProduct(input: ProductInput): Promise<ActionResult> 
 export async function updateProduct(
   id: string,
   input: ProductInput,
+  variantes: VarianteInput[] = [],
 ): Promise<ActionResult> {
   const problema = validar(input);
   if (problema) return { error: problema };
 
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const total = variantes.reduce((a, v) => a + (v.stock || 0), 0);
 
   const { error } = await supabase
     .from("products")
@@ -91,12 +117,25 @@ export async function updateProduct(
       colores: input.colores ?? [],
       talles: input.talles ?? [],
       imagenes: input.imagenes ?? [],
-      stock: input.stock,
+      stock: total,
       activo: input.activo,
     })
     .eq("id", id);
 
   if (error) return { error: `No se pudo guardar: ${error.message}` };
+
+  // Reemplazamos las variantes por las nuevas
+  await supabase.from("product_variantes").delete().eq("product_id", id);
+  if (variantes.length) {
+    await supabase.from("product_variantes").insert(
+      variantes.map((v) => ({
+        product_id: id,
+        talle: v.talle,
+        color: v.color,
+        stock: v.stock,
+      })),
+    );
+  }
 
   revalidarPublico(id);
   redirect("/admin/productos");
