@@ -127,6 +127,73 @@ export interface VentaUnificada {
   items: OrderItem[];
 }
 
+/* ---------------------- Producción de bordados ---------------------- */
+
+export type EstadoProduccion =
+  | "pendiente"
+  | "en_produccion"
+  | "fabricado"
+  | "entregado";
+
+/** Matriz de bordado (reutilizable). */
+export interface Matriz {
+  id: string;
+  nombre: string;
+  archivo_path: string | null;
+  imagen_path: string | null;
+  costo: number;
+  observaciones: string;
+  fecha_creacion: string;
+  created_at: string;
+}
+export type MatrizInput = {
+  nombre: string;
+  costo: number;
+  observaciones: string;
+  archivo_path: string | null;
+  imagen_path: string | null;
+};
+/** Matriz con datos derivados para la biblioteca. */
+export interface MatrizConUso extends Matriz {
+  veces_usada: number;
+  imagen_url: string | null; // URL firmada temporal
+  archivo_url: string | null; // URL firmada temporal
+}
+
+/** Orden de producción de bordado. */
+export interface OrdenProduccion {
+  id: string;
+  numero: number;
+  pedido_referencia: string;
+  cliente: string;
+  fecha: string;
+  product_id: string | null;
+  prenda: string;
+  tipo_prenda: string;
+  talle: string;
+  color: string;
+  cantidad: number;
+  bordado_descripcion: string;
+  bordado_ubicacion: string;
+  bordado_tamano: string;
+  bordado_colores: number;
+  observaciones: string;
+  imagen_ref_path: string | null;
+  archivo_bordado_path: string | null;
+  matriz_id: string | null;
+  estado: EstadoProduccion;
+  fecha_inicio: string | null;
+  fecha_fabricacion: string | null;
+  costo_prenda: number;
+  costo_matriz: number;
+  costo_bordado: number;
+  otros_costos: number;
+  costo_total: number;
+  posicion: number;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Números para el tablero de resumen. */
 export interface DashboardStats {
   ventasMesTotal: number;
