@@ -64,14 +64,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   function addItem(nuevo: Omit<CartItem, "key">) {
     const key = itemKey(nuevo.productId, nuevo.talle, nuevo.color);
+    const max = nuevo.maxStock ?? Infinity;
     setItems((prev) => {
       const existe = prev.find((i) => i.key === key);
       if (existe) {
+        const cant = Math.min(existe.cantidad + nuevo.cantidad, max);
         return prev.map((i) =>
-          i.key === key ? { ...i, cantidad: i.cantidad + nuevo.cantidad } : i,
+          i.key === key
+            ? { ...i, cantidad: cant, maxStock: nuevo.maxStock ?? i.maxStock }
+            : i,
         );
       }
-      return [...prev, { ...nuevo, key }];
+      return [...prev, { ...nuevo, key, cantidad: Math.min(nuevo.cantidad, max) }];
     });
     setIsOpen(true); // abrimos el carrito al agregar
   }
@@ -86,7 +90,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setItems((prev) =>
-      prev.map((i) => (i.key === key ? { ...i, cantidad } : i)),
+      prev.map((i) =>
+        i.key === key
+          ? { ...i, cantidad: Math.min(cantidad, i.maxStock ?? Infinity) }
+          : i,
+      ),
     );
   }
 

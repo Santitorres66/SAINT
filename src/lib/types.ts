@@ -76,6 +76,8 @@ export interface CartItem {
   talle: string | null;
   color: string | null;
   cantidad: number;
+  /** Stock máximo de la variante (para no superar lo disponible). */
+  maxStock?: number;
 }
 
 /** Un ítem tal como se guarda en la orden o venta. */

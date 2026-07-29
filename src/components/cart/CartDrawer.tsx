@@ -130,7 +130,10 @@ export default function CartDrawer() {
                         </span>
                         <button
                           onClick={() => setQty(i.key, i.cantidad + 1)}
-                          className="px-3 py-1 text-saint-gray transition-colors hover:text-saint-white"
+                          disabled={
+                            i.maxStock !== undefined && i.cantidad >= i.maxStock
+                          }
+                          className="px-3 py-1 text-saint-gray transition-colors hover:text-saint-white disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Sumar uno"
                         >
                           +

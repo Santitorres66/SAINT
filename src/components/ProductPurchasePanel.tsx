@@ -16,9 +16,14 @@ export default function ProductPurchasePanel({
   product: Product;
   variantes: ProductVariante[];
 }) {
-  const { addItem } = useCart();
-  const [talle, setTalle] = useState<string | null>(null);
-  const [color, setColor] = useState<string | null>(null);
+  const { addItem, items } = useCart();
+  // Si hay una sola opción, la dejamos elegida de una.
+  const [talle, setTalle] = useState<string | null>(
+    product.talles.length === 1 ? product.talles[0] : null,
+  );
+  const [color, setColor] = useState<string | null>(
+    product.colores.length === 1 ? product.colores[0] : null,
+  );
   const [aviso, setAviso] = useState<string | null>(null);
 
   const necesitaTalle = product.talles.length > 0;
@@ -64,7 +69,22 @@ export default function ProductPurchasePanel({
       return;
     }
     if (usaVariantes && stockSeleccion <= 0) {
-      setAviso("No hay stock de esa combinación. Probá otro talle o color.");
+      setAviso("No hay stock de esa combinación. Probá otro talle.");
+      return;
+    }
+    // No permitir superar el stock disponible
+    const enCarrito = items
+      .filter(
+        (i) =>
+          i.productId === product.id &&
+          (i.talle ?? null) === talle &&
+          (i.color ?? null) === color,
+      )
+      .reduce((a, i) => a + i.cantidad, 0);
+    if (usaVariantes && enCarrito + 1 > stockSeleccion) {
+      setAviso(
+        `No hay más stock. Ya tenés ${enCarrito} en el carrito (quedan ${stockSeleccion}).`,
+      );
       return;
     }
     setAviso(null);
@@ -76,6 +96,7 @@ export default function ProductPurchasePanel({
       talle,
       color,
       cantidad: 1,
+      maxStock: usaVariantes ? stockSeleccion : undefined,
     });
   }
 
@@ -135,8 +156,8 @@ export default function ProductPurchasePanel({
         </div>
       )}
 
-      {/* Colores */}
-      {necesitaColor && (
+      {/* Color: si hay uno solo, se muestra como dato (no se elige) */}
+      {product.colores.length > 1 ? (
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-wide2 text-saint-gray">
             Color
@@ -163,7 +184,14 @@ export default function ProductPurchasePanel({
             })}
           </div>
         </div>
-      )}
+      ) : product.colores.length === 1 ? (
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide2 text-saint-gray">
+            Color
+          </p>
+          <p className="text-sm">{product.colores[0]}</p>
+        </div>
+      ) : null}
 
       {/* Disponibilidad de la combinación elegida */}
       {usaVariantes && combinacionCompleta && !sinStock && (
