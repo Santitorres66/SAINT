@@ -64,9 +64,26 @@ export default function ProductosView({
     );
   }, [products, busca, fColor, fTalle, orden]);
 
-  const valorVenta = products.reduce((a, p) => a + p.stock * p.precio, 0);
-  const valorCosto = products.reduce((a, p) => a + p.stock * (p.costo || 0), 0);
-  const unidades = products.reduce((a, p) => a + p.stock, 0);
+  // Stock a mostrar según los filtros: si filtrás color/talle, muestra el
+  // stock de esa variante; si no, el total del producto.
+  function stockMostrado(p: Product): number {
+    if (!fColor && !fTalle) return p.stock;
+    const vs = variantesPorProd.get(p.id) ?? [];
+    return vs
+      .filter(
+        (v) =>
+          (!fColor || v.color === fColor) && (!fTalle || v.talle === fTalle),
+      )
+      .reduce((a, v) => a + v.stock, 0);
+  }
+
+  const hayFiltros = Boolean(busca || fColor || fTalle);
+  const valorVenta = filtrados.reduce((a, p) => a + stockMostrado(p) * p.precio, 0);
+  const valorCosto = filtrados.reduce(
+    (a, p) => a + stockMostrado(p) * (p.costo || 0),
+    0,
+  );
+  const unidades = filtrados.reduce((a, p) => a + stockMostrado(p), 0);
 
   function cambiarActivo(p: Product) {
     setError(null);
@@ -156,6 +173,19 @@ export default function ProductosView({
           <option value="stock_asc">Menos stock primero</option>
           <option value="nombre">Nombre (A-Z)</option>
         </select>
+        {hayFiltros && (
+          <button
+            type="button"
+            onClick={() => {
+              setBusca("");
+              setFColor("");
+              setFTalle("");
+            }}
+            className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {error && (
@@ -213,10 +243,15 @@ export default function ProductosView({
                   {formatPrecio(p.precio)}
                 </td>
                 <td className="px-4 py-3 text-right text-neutral-700">
-                  {p.stock}
+                  {stockMostrado(p)}
+                  {hayFiltros && stockMostrado(p) !== p.stock && (
+                    <span className="ml-1 text-xs text-neutral-400">
+                      (de {p.stock})
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-neutral-900">
-                  {formatPrecio(p.stock * p.precio)}
+                  {formatPrecio(stockMostrado(p) * p.precio)}
                 </td>
                 <td className="px-4 py-3">
                   <button
