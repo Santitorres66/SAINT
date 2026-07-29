@@ -153,6 +153,33 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+/**
+ * Registra una PÉRDIDA (rotura, robo, defecto): descuenta stock de una
+ * variante puntual, sin que sea una venta.
+ */
+export async function registrarPerdida(
+  productId: string,
+  talle: string,
+  color: string,
+  cantidad: number,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+  if (!cantidad || cantidad <= 0)
+    return { error: "Indicá una cantidad válida." };
+
+  const { error } = await supabase.rpc("descontar_stock_variante", {
+    p_product_id: productId,
+    p_talle: talle || "",
+    p_color: color || "",
+    p_cantidad: cantidad,
+  });
+  if (error) return { error: `No se pudo registrar: ${error.message}` };
+
+  revalidarPublico(productId);
+  return { ok: true };
+}
+
 /** Activa o desactiva un producto (mostrar/ocultar en la web). */
 export async function toggleActivo(
   id: string,

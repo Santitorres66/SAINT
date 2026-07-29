@@ -68,6 +68,13 @@ export async function getProductVariantes(
   return (data as ProductVariante[]) ?? [];
 }
 
+/** Todas las variantes (para la vista de productos del admin). */
+export async function getAllVariantes(): Promise<ProductVariante[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("product_variantes").select("*");
+  return (data as ProductVariante[]) ?? [];
+}
+
 /** Un producto por id (para el detalle público; solo activos por RLS). */
 export async function getProductById(id: string): Promise<Product | null> {
   const supabase = await createClient();

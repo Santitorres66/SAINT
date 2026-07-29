@@ -1,10 +1,13 @@
 import Link from "next/link";
-import ProductTable from "@/components/admin/ProductTable";
-import { getAllProductsAdmin } from "@/lib/products";
+import ProductosView from "@/components/admin/ProductosView";
+import { getAllProductsAdmin, getAllVariantes } from "@/lib/products";
 
-/** Listado de productos con acciones (editar, eliminar, mostrar/ocultar). */
+/** Listado de productos: valorización, filtros, orden y acciones. */
 export default async function ProductosPage() {
-  const products = await getAllProductsAdmin();
+  const [products, variantes] = await Promise.all([
+    getAllProductsAdmin(),
+    getAllVariantes(),
+  ]);
   const activos = products.filter((p) => p.activo).length;
 
   return (
@@ -27,7 +30,7 @@ export default async function ProductosPage() {
         </Link>
       </div>
 
-      <ProductTable products={products} />
+      <ProductosView products={products} variantes={variantes} />
     </div>
   );
 }
