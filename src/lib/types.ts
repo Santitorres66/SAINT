@@ -194,6 +194,13 @@ export interface OrdenProduccion {
   updated_at: string;
 }
 
+/** Orden de producción con datos derivados para las tarjetas/Kanban. */
+export interface OrdenProduccionVista extends OrdenProduccion {
+  imagen_ref_url: string | null; // URL firmada temporal
+  product_nombre: string | null;
+  matriz_nombre: string | null;
+}
+
 /** Números para el tablero de resumen. */
 export interface DashboardStats {
   ventasMesTotal: number;

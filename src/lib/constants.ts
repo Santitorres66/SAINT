@@ -46,6 +46,43 @@ export function whatsappLink(mensaje?: string): string {
 /** Bucket de Supabase Storage donde viven las imágenes de productos. */
 export const STORAGE_BUCKET = "productos";
 
+/** Estados de una orden de producción (para el Kanban), con sus colores. */
+export const ESTADOS_PRODUCCION = [
+  {
+    value: "pendiente",
+    label: "Pendiente",
+    col: "bg-amber-50 border-amber-200",
+    chip: "bg-amber-100 text-amber-800",
+  },
+  {
+    value: "en_produccion",
+    label: "En producción",
+    col: "bg-blue-50 border-blue-200",
+    chip: "bg-blue-100 text-blue-800",
+  },
+  {
+    value: "fabricado",
+    label: "Fabricado",
+    col: "bg-green-50 border-green-200",
+    chip: "bg-green-100 text-green-800",
+  },
+  {
+    value: "entregado",
+    label: "Entregado",
+    col: "bg-neutral-100 border-neutral-200",
+    chip: "bg-neutral-200 text-neutral-700",
+  },
+] as const;
+
+export function labelEstado(value: string): string {
+  return ESTADOS_PRODUCCION.find((e) => e.value === value)?.label ?? value;
+}
+
+/** Muestra el número de orden con formato #00025. */
+export function formatNumeroOrden(n: number): string {
+  return "#" + String(n).padStart(5, "0");
+}
+
 /** Formatea un precio en pesos argentinos (sin centavos). */
 export function formatPrecio(valor: number): string {
   return new Intl.NumberFormat("es-AR", {

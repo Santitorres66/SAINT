@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Matriz, MatrizConUso } from "./types";
+import type {
+  Matriz,
+  MatrizConUso,
+  OrdenProduccion,
+  OrdenProduccionVista,
+} from "./types";
 
 /** Bucket privado donde viven los archivos de producción. */
 export const BUCKET_PRODUCCION = "produccion";
@@ -74,4 +79,56 @@ export async function getMatricesSimple(): Promise<Matriz[]> {
     .select("*")
     .order("nombre", { ascending: true });
   return (data as Matriz[]) ?? [];
+}
+
+/* ------------------------- Órdenes de producción ------------------------- */
+
+type OrdenRow = OrdenProduccion & {
+  products: { nombre: string } | null;
+  matrices: { nombre: string } | null;
+};
+
+export async function getOrdenesProduccion(): Promise<OrdenProduccionVista[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ordenes_produccion")
+    .select("*, products(nombre), matrices(nombre)")
+    .order("posicion", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("getOrdenesProduccion:", error.message);
+    return [];
+  }
+
+  const filas = (data as OrdenRow[]) ?? [];
+  const urls = await firmarUrls(filas.map((o) => o.imagen_ref_path));
+
+  return filas.map((o) => ({
+    ...o,
+    imagen_ref_url: o.imagen_ref_path
+      ? urls.get(o.imagen_ref_path) ?? null
+      : null,
+    product_nombre: o.products?.nombre ?? null,
+    matriz_nombre: o.matrices?.nombre ?? null,
+  }));
+}
+
+export async function getOrdenProduccionById(
+  id: string,
+): Promise<OrdenProduccionVista | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ordenes_produccion")
+    .select("*, products(nombre), matrices(nombre)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  const o = data as OrdenRow;
+  return {
+    ...o,
+    imagen_ref_url: await firmarUrl(o.imagen_ref_path),
+    product_nombre: o.products?.nombre ?? null,
+    matriz_nombre: o.matrices?.nombre ?? null,
+  };
 }
