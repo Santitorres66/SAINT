@@ -4,6 +4,8 @@ import type {
   MatrizConUso,
   OrdenProduccion,
   OrdenProduccionVista,
+  OrdenDetalle,
+  ProduccionHistorialItem,
 } from "./types";
 
 /** Bucket privado donde viven los archivos de producción. */
@@ -130,5 +132,66 @@ export async function getOrdenProduccionById(
     imagen_ref_url: await firmarUrl(o.imagen_ref_path),
     product_nombre: o.products?.nombre ?? null,
     matriz_nombre: o.matrices?.nombre ?? null,
+  };
+}
+
+/** Detalle completo de una orden (con archivos firmados, matriz e historial). */
+export async function getOrdenDetalle(id: string): Promise<OrdenDetalle | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("ordenes_produccion")
+    .select("*, products(nombre), matrices(nombre, costo, imagen_path, archivo_path)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+
+  const o = data as OrdenRow & {
+    matrices:
+      | {
+          nombre: string;
+          costo: number;
+          imagen_path: string | null;
+          archivo_path: string | null;
+        }
+      | null;
+  };
+
+  const urls = await firmarUrls([
+    o.imagen_ref_path,
+    o.archivo_bordado_path,
+    o.matrices?.imagen_path,
+    o.matrices?.archivo_path,
+  ]);
+
+  const { data: hist } = await supabase
+    .from("produccion_historial")
+    .select("*")
+    .eq("orden_id", id)
+    .order("created_at", { ascending: false });
+
+  return {
+    orden: {
+      ...o,
+      imagen_ref_url: o.imagen_ref_path ? urls.get(o.imagen_ref_path) ?? null : null,
+      product_nombre: o.products?.nombre ?? null,
+      matriz_nombre: o.matrices?.nombre ?? null,
+    },
+    imagen_ref_url: o.imagen_ref_path ? urls.get(o.imagen_ref_path) ?? null : null,
+    archivo_bordado_url: o.archivo_bordado_path
+      ? urls.get(o.archivo_bordado_path) ?? null
+      : null,
+    matriz: o.matrices
+      ? {
+          nombre: o.matrices.nombre,
+          costo: o.matrices.costo,
+          imagen_url: o.matrices.imagen_path
+            ? urls.get(o.matrices.imagen_path) ?? null
+            : null,
+          archivo_url: o.matrices.archivo_path
+            ? urls.get(o.matrices.archivo_path) ?? null
+            : null,
+        }
+      : null,
+    historial: (hist as ProduccionHistorialItem[]) ?? [],
   };
 }

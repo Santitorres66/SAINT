@@ -228,6 +228,29 @@ export interface OrdenProduccionVista extends OrdenProduccion {
   matriz_nombre: string | null;
 }
 
+/** Una fila del historial de estados. */
+export interface ProduccionHistorialItem {
+  id: string;
+  estado_anterior: string | null;
+  estado_nuevo: string | null;
+  usuario: string;
+  created_at: string;
+}
+
+/** Todo lo necesario para el detalle de una orden. */
+export interface OrdenDetalle {
+  orden: OrdenProduccionVista;
+  imagen_ref_url: string | null;
+  archivo_bordado_url: string | null;
+  matriz: {
+    nombre: string;
+    costo: number;
+    imagen_url: string | null;
+    archivo_url: string | null;
+  } | null;
+  historial: ProduccionHistorialItem[];
+}
+
 /** Números para el tablero de resumen. */
 export interface DashboardStats {
   ventasMesTotal: number;
