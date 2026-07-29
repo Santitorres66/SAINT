@@ -1,29 +1,58 @@
 "use client";
 
 import { useState } from "react";
-import type { Product } from "@/lib/types";
+import type { Product, ProductVariante } from "@/lib/types";
 import { formatPrecio, whatsappLink } from "@/lib/constants";
 import { useCart } from "@/lib/cart/CartContext";
 
 /**
- * Panel de compra del detalle de producto: selección de talle y color,
- * bloque informativo del bordado y botón "Agregar al carrito".
- * Al agregar, el ítem entra al carrito y se abre el panel lateral.
- * El pago se completa desde el carrito con Mercado Pago.
+ * Panel de compra del detalle de producto: selección de talle y color
+ * (respetando el stock por variante), bloque del bordado y "Agregar al carrito".
  */
 export default function ProductPurchasePanel({
   product,
+  variantes,
 }: {
   product: Product;
+  variantes: ProductVariante[];
 }) {
   const { addItem } = useCart();
   const [talle, setTalle] = useState<string | null>(null);
   const [color, setColor] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
-  const sinStock = product.stock <= 0;
   const necesitaTalle = product.talles.length > 0;
   const necesitaColor = product.colores.length > 0;
+  const usaVariantes = variantes.length > 0;
+
+  // Stock por combinación talle|color
+  const stockMap = new Map(
+    variantes.map((v) => [`${v.talle}|${v.color}`, v.stock]),
+  );
+  const stockDe = (t: string | null, c: string | null) =>
+    stockMap.get(`${t ?? ""}|${c ?? ""}`) ?? 0;
+
+  // ¿Hay stock para este talle (según el color elegido o cualquiera)?
+  function talleDisponible(t: string) {
+    if (!usaVariantes) return true;
+    if (color) return stockDe(t, color) > 0;
+    if (!necesitaColor) return stockDe(t, null) > 0;
+    return product.colores.some((c) => stockDe(t, c) > 0);
+  }
+  function colorDisponible(c: string) {
+    if (!usaVariantes) return true;
+    if (talle) return stockDe(talle, c) > 0;
+    if (!necesitaTalle) return stockDe(null, c) > 0;
+    return product.talles.some((t) => stockDe(t, c) > 0);
+  }
+
+  const sinStock = usaVariantes
+    ? variantes.every((v) => v.stock <= 0)
+    : product.stock <= 0;
+
+  const combinacionCompleta =
+    (!necesitaTalle || !!talle) && (!necesitaColor || !!color);
+  const stockSeleccion = stockDe(talle, color);
 
   function agregar() {
     if (necesitaTalle && !talle) {
@@ -32,6 +61,10 @@ export default function ProductPurchasePanel({
     }
     if (necesitaColor && !color) {
       setAviso("Elegí un color para continuar.");
+      return;
+    }
+    if (usaVariantes && stockSeleccion <= 0) {
+      setAviso("No hay stock de esa combinación. Probá otro talle o color.");
       return;
     }
     setAviso(null);
@@ -46,11 +79,7 @@ export default function ProductPurchasePanel({
     });
   }
 
-  // Mensaje de WhatsApp para pedir un bordado personalizado, con lo que eligió.
-  const detalleSeleccion = [
-    talle && `talle ${talle}`,
-    color && `color ${color}`,
-  ]
+  const detalleSeleccion = [talle && `talle ${talle}`, color && `color ${color}`]
     .filter(Boolean)
     .join(", ");
   const mensajeBordado = `¡Hola SAINT! 🖤 Me interesa "${product.nombre}"${
@@ -83,19 +112,25 @@ export default function ProductPurchasePanel({
             Talle
           </p>
           <div className="flex flex-wrap gap-2">
-            {product.talles.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTalle(t)}
-                className={`min-w-[3rem] border px-4 py-2 text-sm transition-all duration-300 ${
-                  talle === t
-                    ? "border-saint-white bg-saint-white text-saint-black"
-                    : "border-saint-line text-saint-gray hover:border-saint-white hover:text-saint-white"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+            {product.talles.map((t) => {
+              const disp = talleDisponible(t);
+              return (
+                <button
+                  key={t}
+                  onClick={() => disp && setTalle(t)}
+                  disabled={!disp}
+                  className={`min-w-[3rem] border px-4 py-2 text-sm transition-all duration-300 ${
+                    talle === t
+                      ? "border-saint-white bg-saint-white text-saint-black"
+                      : disp
+                        ? "border-saint-line text-saint-gray hover:border-saint-white hover:text-saint-white"
+                        : "cursor-not-allowed border-saint-line/40 text-saint-gray/30 line-through"
+                  }`}
+                >
+                  {t}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -107,21 +142,36 @@ export default function ProductPurchasePanel({
             Color
           </p>
           <div className="flex flex-wrap gap-2">
-            {product.colores.map((c) => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`border px-4 py-2 text-sm transition-all duration-300 ${
-                  color === c
-                    ? "border-saint-white bg-saint-white text-saint-black"
-                    : "border-saint-line text-saint-gray hover:border-saint-white hover:text-saint-white"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
+            {product.colores.map((c) => {
+              const disp = colorDisponible(c);
+              return (
+                <button
+                  key={c}
+                  onClick={() => disp && setColor(c)}
+                  disabled={!disp}
+                  className={`border px-4 py-2 text-sm transition-all duration-300 ${
+                    color === c
+                      ? "border-saint-white bg-saint-white text-saint-black"
+                      : disp
+                        ? "border-saint-line text-saint-gray hover:border-saint-white hover:text-saint-white"
+                        : "cursor-not-allowed border-saint-line/40 text-saint-gray/30 line-through"
+                  }`}
+                >
+                  {c}
+                </button>
+              );
+            })}
           </div>
         </div>
+      )}
+
+      {/* Disponibilidad de la combinación elegida */}
+      {usaVariantes && combinacionCompleta && !sinStock && (
+        <p className="text-xs text-saint-gray">
+          {stockSeleccion > 0
+            ? `Disponible${stockSeleccion <= 5 ? ` · quedan ${stockSeleccion}` : ""}`
+            : "Sin stock en esa combinación"}
+        </p>
       )}
 
       {/* Botón */}

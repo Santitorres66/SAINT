@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Gallery from "@/components/Gallery";
 import ProductPurchasePanel from "@/components/ProductPurchasePanel";
-import { getProductById } from "@/lib/products";
+import { getProductById, getProductVariantes } from "@/lib/products";
 
 /** SEO dinámico por producto. */
 export async function generateMetadata({
@@ -42,6 +42,8 @@ export default async function ProductoPage({
 
   if (!product) notFound();
 
+  const variantes = await getProductVariantes(id);
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
       {/* Volver */}
@@ -54,7 +56,7 @@ export default async function ProductoPage({
 
       <div className="grid gap-12 lg:grid-cols-2">
         <Gallery imagenes={product.imagenes} nombre={product.nombre} />
-        <ProductPurchasePanel product={product} />
+        <ProductPurchasePanel product={product} variantes={variantes} />
       </div>
     </div>
   );
