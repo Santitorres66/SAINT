@@ -100,14 +100,53 @@ export async function POST(request: Request) {
     // Descontamos stock solo al pasar a aprobado por primera vez
     if (nuevoEstado === "approved" && !yaAprobada) {
       const items = (orden.items as OrderItem[]) ?? [];
+
+      // Nombre del comprador (para la orden de producción)
+      const payer = pago.payer as
+        | { email?: string; first_name?: string; last_name?: string }
+        | undefined;
+      const nombreComprador =
+        [payer?.first_name, payer?.last_name].filter(Boolean).join(" ") ||
+        payer?.email ||
+        "Cliente web";
+      const refPedido = `Venta web ${String(orderId).slice(0, 8)}`;
+
       for (const item of items) {
-        if (!item.product_id) continue;
-        await supabase.rpc("descontar_stock_variante", {
-          p_product_id: item.product_id,
-          p_talle: item.talle ?? "",
-          p_color: item.color ?? "",
-          p_cantidad: item.cantidad,
-        });
+        // 1) Descontar stock de la variante vendida
+        if (item.product_id) {
+          await supabase.rpc("descontar_stock_variante", {
+            p_product_id: item.product_id,
+            p_talle: item.talle ?? "",
+            p_color: item.color ?? "",
+            p_cantidad: item.cantidad,
+          });
+        }
+
+        // 2) Crear la orden de producción (SIN volver a descontar stock:
+        //    la venta ya lo hizo). Queda en "Pendiente" para fabricar.
+        const { data: op } = await supabase
+          .from("ordenes_produccion")
+          .insert({
+            pedido_referencia: refPedido,
+            cliente: nombreComprador,
+            product_id: item.product_id,
+            prenda: item.nombre,
+            talle: item.talle ?? "",
+            color: item.color ?? "",
+            cantidad: item.cantidad,
+            estado: "pendiente",
+          })
+          .select("id")
+          .single();
+
+        if (op) {
+          await supabase.from("produccion_historial").insert({
+            orden_id: op.id,
+            estado_anterior: null,
+            estado_nuevo: "pendiente",
+            usuario: "venta web",
+          });
+        }
       }
     }
 
