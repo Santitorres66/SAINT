@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { Product, Matriz } from "@/lib/types";
+import type { Product, Matriz, Cliente } from "@/lib/types";
+import { nombreCompleto } from "@/lib/types";
 import { formatPrecio, labelCategoria } from "@/lib/constants";
 import { createOrdenProduccion } from "@/app/admin/produccion-actions";
 import ProduccionFileInput from "./ProduccionFileInput";
@@ -13,9 +14,11 @@ type MatrizModo = "ninguna" | "existente" | "nueva";
 export default function OrdenProduccionForm({
   products,
   matrices,
+  clientes,
 }: {
   products: Product[];
   matrices: Matriz[];
+  clientes: Cliente[];
 }) {
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +27,13 @@ export default function OrdenProduccionForm({
   // Pedido
   const [pedidoRef, setPedidoRef] = useState("");
   const [cliente, setCliente] = useState("");
+  const [clienteId, setClienteId] = useState("");
+
+  function elegirCliente(id: string) {
+    setClienteId(id);
+    const c = clientes.find((x) => x.id === id);
+    if (c) setCliente(nombreCompleto(c));
+  }
   const [fecha, setFecha] = useState(hoy);
   const [productId, setProductId] = useState("");
   const [prenda, setPrenda] = useState("");
@@ -98,6 +108,7 @@ export default function OrdenProduccionForm({
       const res = await createOrdenProduccion({
         pedido_referencia: pedidoRef,
         cliente,
+        cliente_id: clienteId || null,
         fecha,
         product_id: productId || null,
         prenda,
@@ -161,9 +172,26 @@ export default function OrdenProduccionForm({
           </div>
           <div>
             <label className={label}>Cliente</label>
+            {clientes.length > 0 && (
+              <select
+                value={clienteId}
+                onChange={(e) => elegirCliente(e.target.value)}
+                className={input + " mb-2"}
+              >
+                <option value="">— Elegir del master —</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {nombreCompleto(c)}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               value={cliente}
-              onChange={(e) => setCliente(e.target.value)}
+              onChange={(e) => {
+                setCliente(e.target.value);
+                setClienteId("");
+              }}
               className={input}
               placeholder="Nombre del cliente"
             />

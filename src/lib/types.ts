@@ -27,6 +27,31 @@ export type ProductInput = Omit<Product, "id" | "created_at" | "updated_at">;
 /** Respuesta estándar de las server actions. */
 export type ActionResult = { error?: string; ok?: boolean };
 
+/* ----------------------------- Clientes ----------------------------- */
+
+/** Cliente del master. */
+export interface Cliente {
+  id: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  email: string;
+  domicilio: string;
+  localidad: string;
+  provincia: string;
+  observaciones: string;
+  created_at: string;
+}
+export type ClienteInput = Omit<Cliente, "id" | "created_at">;
+
+/** Nombre completo legible de un cliente. */
+export function nombreCompleto(c: {
+  nombre: string;
+  apellido?: string;
+}): string {
+  return [c.nombre, c.apellido].filter(Boolean).join(" ").trim();
+}
+
 /* ------------------------- Carrito y órdenes ------------------------- */
 
 /** Un ítem dentro del carrito (en el navegador). */
@@ -109,6 +134,7 @@ export interface VentaManual {
   created_at: string;
   fecha: string;
   cliente: string;
+  cliente_id: string | null;
   medio_pago: string;
   total: number;
   items: OrderItem[];
@@ -166,6 +192,7 @@ export interface OrdenProduccion {
   numero: number;
   pedido_referencia: string;
   cliente: string;
+  cliente_id: string | null;
   fecha: string;
   product_id: string | null;
   prenda: string;

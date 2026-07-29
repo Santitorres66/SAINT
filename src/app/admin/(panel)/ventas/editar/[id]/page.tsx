@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import VentaManualForm from "@/components/admin/VentaManualForm";
 import { getAllProductsAdmin } from "@/lib/products";
 import { getVentaManualById } from "@/lib/gestion";
+import { getClientes } from "@/lib/clientes";
 
 /** Página para editar una venta manual. */
 export default async function EditarVentaPage({
@@ -11,9 +12,10 @@ export default async function EditarVentaPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [venta, products] = await Promise.all([
+  const [venta, products, clientes] = await Promise.all([
     getVentaManualById(id),
     getAllProductsAdmin(),
+    getClientes(),
   ]);
 
   if (!venta) notFound();
@@ -29,7 +31,7 @@ export default async function EditarVentaPage({
       <h1 className="mb-8 text-2xl font-semibold text-neutral-900">
         Editar venta
       </h1>
-      <VentaManualForm products={products} initial={venta} />
+      <VentaManualForm products={products} clientes={clientes} initial={venta} />
     </div>
   );
 }

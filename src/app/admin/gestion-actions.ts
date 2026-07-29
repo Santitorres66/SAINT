@@ -176,6 +176,7 @@ export async function deleteCompra(id: string): Promise<ActionResult> {
 
 export async function createVentaManual(input: {
   cliente: string;
+  cliente_id: string | null;
   medio_pago: string;
   fecha: string;
   items: OrderItem[];
@@ -194,6 +195,7 @@ export async function createVentaManual(input: {
 
   const { error } = await supabase.from("ventas").insert({
     cliente: input.cliente?.trim() ?? "",
+    cliente_id: input.cliente_id ?? null,
     medio_pago: input.medio_pago?.trim() ?? "",
     fecha: input.fecha || new Date().toISOString(),
     total,
@@ -222,6 +224,7 @@ export async function updateVentaManual(
   id: string,
   input: {
     cliente: string;
+    cliente_id: string | null;
     medio_pago: string;
     fecha: string;
     items: OrderItem[];
@@ -260,6 +263,7 @@ export async function updateVentaManual(
     .from("ventas")
     .update({
       cliente: input.cliente?.trim() ?? "",
+      cliente_id: input.cliente_id ?? null,
       medio_pago: input.medio_pago?.trim() ?? "",
       fecha: input.fecha || new Date().toISOString(),
       total,

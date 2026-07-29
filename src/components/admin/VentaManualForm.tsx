@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { Product, OrderItem, VentaManual } from "@/lib/types";
+import type { Product, OrderItem, VentaManual, Cliente } from "@/lib/types";
+import { nombreCompleto } from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
 import {
   createVentaManual,
@@ -46,9 +47,11 @@ const LINEA_VACIA: Linea = {
  */
 export default function VentaManualForm({
   products,
+  clientes,
   initial,
 }: {
   products: Product[];
+  clientes: Cliente[];
   initial?: VentaManual;
 }) {
   const esEdicion = Boolean(initial);
@@ -57,6 +60,13 @@ export default function VentaManualForm({
 
   const hoy = new Date().toISOString().slice(0, 10);
   const [cliente, setCliente] = useState(initial?.cliente ?? "");
+  const [clienteId, setClienteId] = useState(initial?.cliente_id ?? "");
+
+  function elegirCliente(id: string) {
+    setClienteId(id);
+    const c = clientes.find((x) => x.id === id);
+    if (c) setCliente(nombreCompleto(c));
+  }
   const [medioPago, setMedioPago] = useState(initial?.medio_pago || "Efectivo");
   const [fecha, setFecha] = useState(
     initial?.fecha ? initial.fecha.slice(0, 10) : hoy,
@@ -119,6 +129,7 @@ export default function VentaManualForm({
 
     const payload = {
       cliente,
+      cliente_id: clienteId || null,
       medio_pago: medioPago,
       fecha,
       items,
@@ -153,10 +164,27 @@ export default function VentaManualForm({
           <label htmlFor="cliente" className={labelClase}>
             Cliente
           </label>
+          {clientes.length > 0 && (
+            <select
+              value={clienteId}
+              onChange={(e) => elegirCliente(e.target.value)}
+              className={inputClase + " mb-2"}
+            >
+              <option value="">— Elegir del master (o escribir abajo) —</option>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {nombreCompleto(c)}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             id="cliente"
             value={cliente}
-            onChange={(e) => setCliente(e.target.value)}
+            onChange={(e) => {
+              setCliente(e.target.value);
+              setClienteId("");
+            }}
             className={inputClase}
             placeholder="Nombre del cliente"
           />

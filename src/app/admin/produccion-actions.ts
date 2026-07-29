@@ -14,6 +14,7 @@ function revalidarProduccion() {
 type NuevaOrdenInput = {
   pedido_referencia: string;
   cliente: string;
+  cliente_id: string | null;
   fecha: string;
   product_id: string | null;
   prenda: string;
@@ -138,6 +139,7 @@ export async function createOrdenProduccion(
     .insert({
       pedido_referencia: input.pedido_referencia?.trim() ?? "",
       cliente: input.cliente?.trim() ?? "",
+      cliente_id: input.cliente_id,
       fecha: input.fecha || new Date().toISOString(),
       product_id: input.product_id,
       prenda: input.prenda?.trim() ?? "",

@@ -1,10 +1,14 @@
 import Link from "next/link";
 import VentaManualForm from "@/components/admin/VentaManualForm";
 import { getAllProductsAdmin } from "@/lib/products";
+import { getClientes } from "@/lib/clientes";
 
 /** Página para registrar una venta manual. */
 export default async function NuevaVentaPage() {
-  const products = await getAllProductsAdmin();
+  const [products, clientes] = await Promise.all([
+    getAllProductsAdmin(),
+    getClientes(),
+  ]);
 
   return (
     <div>
@@ -31,7 +35,7 @@ export default async function NuevaVentaPage() {
           </Link>
         </div>
       ) : (
-        <VentaManualForm products={products} />
+        <VentaManualForm products={products} clientes={clientes} />
       )}
     </div>
   );
