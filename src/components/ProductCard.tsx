@@ -44,6 +44,11 @@ export default function ProductCard({ product }: { product: Product }) {
         <h3 className="font-serif text-lg transition-colors duration-300 group-hover:text-saint-gray">
           {product.nombre}
         </h3>
+        {product.colores.length > 0 && (
+          <p className="text-xs uppercase tracking-wide2 text-saint-gray">
+            {product.colores.join(" · ")}
+          </p>
+        )}
         <p className="text-sm text-saint-gray">{formatPrecio(product.precio)}</p>
       </div>
     </Link>

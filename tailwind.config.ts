@@ -11,12 +11,15 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Tema CLARO: fondo claro con letras oscuras.
+        // (Los nombres black/white se mantienen por compatibilidad de clases,
+        //  pero ahora "black" = fondo claro y "white" = texto oscuro.)
         saint: {
-          black: "#0d0d0d", // fondo principal
-          ink: "#111111", // superficies apenas elevadas
-          white: "#f5f4f2", // blanco roto para texto
-          gray: "#9a9a9a", // texto secundario
-          line: "#262626", // líneas finas / bordes
+          black: "#f7f6f4", // fondo principal (claro)
+          ink: "#eeece7", // superficies apenas elevadas
+          white: "#141414", // texto principal (oscuro)
+          gray: "#6b6b6b", // texto secundario
+          line: "#e2ded7", // líneas finas / bordes
         },
       },
       fontFamily: {
