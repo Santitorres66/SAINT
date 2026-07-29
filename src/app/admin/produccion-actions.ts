@@ -9,6 +9,11 @@ import type { MatrizInput, ActionResult } from "@/lib/types";
 function revalidarProduccion() {
   revalidatePath("/admin/produccion");
   revalidatePath("/admin/produccion/matrices");
+  // El stock puede cambiar al crear órdenes → refrescamos productos y web
+  revalidatePath("/admin/productos");
+  revalidatePath("/admin");
+  revalidatePath("/");
+  revalidatePath("/tienda");
 }
 
 type NuevaOrdenInput = {
@@ -108,6 +113,21 @@ export async function createOrdenProduccion(
   if (!input.prenda?.trim() && !input.product_id)
     return { error: "Indicá la prenda (elegí un producto o escribila)." };
 
+  // Si la orden usa un producto del sistema, verificamos que haya stock
+  const cant = input.cantidad || 1;
+  if (input.product_id) {
+    const { data: prod } = await supabase
+      .from("products")
+      .select("nombre, stock")
+      .eq("id", input.product_id)
+      .single();
+    if (prod && prod.stock < cant) {
+      return {
+        error: `No hay stock suficiente de "${prod.nombre}": quedan ${prod.stock} y la orden pide ${cant}.`,
+      };
+    }
+  }
+
   // Resolver la matriz
   let matrizId: string | null = null;
   if (input.matriz_modo === "existente") {
@@ -167,6 +187,14 @@ export async function createOrdenProduccion(
 
   if (error || !orden)
     return { error: `No se pudo crear la orden: ${error?.message}` };
+
+  // Descontamos el stock del producto (producimos lo que realmente tenemos)
+  if (input.product_id) {
+    await supabase.rpc("descontar_stock", {
+      p_product_id: input.product_id,
+      p_cantidad: cant,
+    });
+  }
 
   // Registro inicial en el historial
   await supabase.from("produccion_historial").insert({

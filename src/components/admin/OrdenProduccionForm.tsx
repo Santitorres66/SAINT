@@ -70,13 +70,17 @@ export default function OrdenProduccionForm({
 
   function elegirProducto(id: string) {
     setProductId(id);
+    setTalle("");
+    setColor("");
     const prod = products.find((p) => p.id === id);
     if (prod) {
       setPrenda(prod.nombre);
       setTipoPrenda(labelCategoria(prod.categoria));
-      if (!costoPrenda) setCostoPrenda(String(prod.costo || ""));
+      setCostoPrenda(String(prod.costo || ""));
     }
   }
+
+  const productoElegido = products.find((p) => p.id === productId);
 
   function cambiarMatrizModo(modo: MatrizModo) {
     setMatrizModo(modo);
@@ -217,10 +221,16 @@ export default function OrdenProduccionForm({
             <option value="">— Sin producto (escribir a mano) —</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.nombre}
+                {p.nombre} — stock {p.stock}
               </option>
             ))}
           </select>
+          {productoElegido && (
+            <p className="mt-1 text-xs text-neutral-500">
+              Al crear la orden se descuenta del stock. Disponible:{" "}
+              <strong>{productoElegido.stock}</strong>
+            </p>
+          )}
           <input
             value={prenda}
             onChange={(e) => setPrenda(e.target.value)}
@@ -241,21 +251,51 @@ export default function OrdenProduccionForm({
           </div>
           <div>
             <label className={label}>Talle</label>
-            <input
-              value={talle}
-              onChange={(e) => setTalle(e.target.value)}
-              className={input}
-              placeholder="Ej: L"
-            />
+            {productoElegido && productoElegido.talles.length > 0 ? (
+              <select
+                value={talle}
+                onChange={(e) => setTalle(e.target.value)}
+                className={input}
+              >
+                <option value="">Elegir talle</option>
+                {productoElegido.talles.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={talle}
+                onChange={(e) => setTalle(e.target.value)}
+                className={input}
+                placeholder="Ej: L"
+              />
+            )}
           </div>
           <div>
             <label className={label}>Color</label>
-            <input
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className={input}
-              placeholder="Ej: Negro"
-            />
+            {productoElegido && productoElegido.colores.length > 0 ? (
+              <select
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className={input}
+              >
+                <option value="">Elegir color</option>
+                {productoElegido.colores.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className={input}
+                placeholder="Ej: Negro"
+              />
+            )}
           </div>
           <div>
             <label className={label}>Cantidad</label>

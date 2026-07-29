@@ -104,6 +104,11 @@ export default function ProductTable({ products }: { products: Product[] }) {
                 <p className="text-sm text-neutral-500">
                   {labelCategoria(p.categoria)}
                 </p>
+                {p.talles.length > 0 && (
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    Talles: {p.talles.join(", ")}
+                  </p>
+                )}
                 {/* En mobile mostramos precio/stock acá */}
                 <p className="mt-1 text-sm text-neutral-500 md:hidden">
                   {formatPrecio(p.precio)} · Stock: {p.stock}
