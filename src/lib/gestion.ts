@@ -151,7 +151,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .gte("created_at", inicioMes),
     supabase.from("ventas").select("total, items").gte("fecha", inicioMes),
     supabase.from("compras").select("total").gte("fecha", inicioMes),
-    supabase.from("products").select("id, nombre, costo, stock, activo"),
+    supabase.from("products").select("id, nombre, costo, precio, stock, activo"),
   ]);
 
   const prods =
@@ -159,6 +159,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       id: string;
       nombre: string;
       costo: number;
+      precio: number;
       stock: number;
       activo: boolean;
     }[]) ?? [];
@@ -194,6 +195,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .slice(0, 10)
     .map((p) => ({ id: p.id, nombre: p.nombre, stock: p.stock }));
 
+  const stockValorizadoCosto = prods.reduce(
+    (a, p) => a + p.stock * (Number(p.costo) || 0),
+    0,
+  );
+  const stockValorizadoVenta = prods.reduce(
+    (a, p) => a + p.stock * (Number(p.precio) || 0),
+    0,
+  );
+  const unidadesEnStock = prods.reduce((a, p) => a + p.stock, 0);
+
   return {
     ventasMesTotal,
     ventasMesCantidad,
@@ -201,5 +212,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     gananciaMesEstimada,
     productosActivos: prods.filter((p) => p.activo).length,
     stockBajo,
+    stockValorizadoCosto,
+    stockValorizadoVenta,
+    unidadesEnStock,
   };
 }

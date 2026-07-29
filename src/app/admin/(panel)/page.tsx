@@ -56,6 +56,23 @@ export default async function TableroPage() {
         ))}
       </div>
 
+      {/* Stock valorizado (capital) */}
+      <div className="rounded-2xl border border-neutral-200 bg-gradient-to-br from-neutral-900 to-neutral-700 p-6 text-white">
+        <p className="text-sm text-white/70">
+          Stock valorizado · capital en mercadería
+        </p>
+        <p className="mt-2 text-3xl font-semibold">
+          {formatPrecio(stats.stockValorizadoCosto)}
+        </p>
+        <p className="mt-1 text-sm text-white/60">
+          a precio de costo · {stats.unidadesEnStock} unidades en stock
+        </p>
+        <p className="mt-3 border-t border-white/15 pt-3 text-sm text-white/80">
+          Valor a precio de venta:{" "}
+          <strong>{formatPrecio(stats.stockValorizadoVenta)}</strong>
+        </p>
+      </div>
+
       {/* Accesos rápidos */}
       <div className="grid gap-4 sm:grid-cols-3">
         <QuickLink
