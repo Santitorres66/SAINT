@@ -113,17 +113,19 @@ export async function createOrdenProduccion(
   if (!input.prenda?.trim() && !input.product_id)
     return { error: "Indicá la prenda (elegí un producto o escribila)." };
 
-  // Si la orden usa un producto del sistema, verificamos que haya stock
+  // Verificamos el stock de la VARIANTE exacta (talle + color)
   const cant = input.cantidad || 1;
   if (input.product_id) {
-    const { data: prod } = await supabase
-      .from("products")
-      .select("nombre, stock")
-      .eq("id", input.product_id)
-      .single();
-    if (prod && prod.stock < cant) {
+    const { data: variante } = await supabase
+      .from("product_variantes")
+      .select("stock")
+      .eq("product_id", input.product_id)
+      .eq("talle", input.talle || "")
+      .eq("color", input.color || "")
+      .maybeSingle();
+    if (variante && variante.stock < cant) {
       return {
-        error: `No hay stock suficiente de "${prod.nombre}": quedan ${prod.stock} y la orden pide ${cant}.`,
+        error: `No hay stock suficiente de esa variante (talle ${input.talle || "-"}, color ${input.color || "-"}): quedan ${variante.stock}.`,
       };
     }
   }
@@ -188,10 +190,12 @@ export async function createOrdenProduccion(
   if (error || !orden)
     return { error: `No se pudo crear la orden: ${error?.message}` };
 
-  // Descontamos el stock del producto (producimos lo que realmente tenemos)
+  // Descontamos el stock de la variante (producimos lo que realmente tenemos)
   if (input.product_id) {
-    await supabase.rpc("descontar_stock", {
+    await supabase.rpc("descontar_stock_variante", {
       p_product_id: input.product_id,
+      p_talle: input.talle || "",
+      p_color: input.color || "",
       p_cantidad: cant,
     });
   }
@@ -215,7 +219,7 @@ export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
 
   const { data: orden } = await supabase
     .from("ordenes_produccion")
-    .select("product_id, cantidad")
+    .select("product_id, cantidad, talle, color")
     .eq("id", id)
     .single();
 
@@ -225,10 +229,12 @@ export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
     .eq("id", id);
   if (error) return { error: `No se pudo eliminar: ${error.message}` };
 
-  // Devolvemos al stock lo que la orden había descontado
+  // Devolvemos a la variante lo que la orden había descontado
   if (orden?.product_id) {
-    await supabase.rpc("sumar_stock", {
+    await supabase.rpc("sumar_stock_variante", {
       p_product_id: orden.product_id,
+      p_talle: orden.talle ?? "",
+      p_color: orden.color ?? "",
       p_cantidad: orden.cantidad ?? 1,
     });
   }

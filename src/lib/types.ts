@@ -122,6 +122,8 @@ export type ProveedorInput = Omit<Proveedor, "id" | "created_at">;
 export interface CompraItem {
   product_id: string;
   nombre: string;
+  talle: string | null;
+  color: string | null;
   cantidad: number;
   costo_unitario: number;
 }

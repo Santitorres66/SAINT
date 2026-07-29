@@ -126,11 +126,13 @@ export async function createCompra(input: {
   if (error || !compra)
     return { error: `No se pudo guardar la compra: ${error?.message}` };
 
-  // Sumar stock y actualizar el costo de cada producto
+  // Sumar stock a la variante y actualizar el costo del producto
   for (const it of input.items) {
     if (!it.product_id) continue;
-    await supabase.rpc("sumar_stock", {
+    await supabase.rpc("sumar_stock_variante", {
       p_product_id: it.product_id,
+      p_talle: it.talle ?? "",
+      p_color: it.color ?? "",
       p_cantidad: it.cantidad,
     });
     await supabase
@@ -157,8 +159,10 @@ export async function deleteCompra(id: string): Promise<ActionResult> {
   if (compra?.items) {
     for (const it of compra.items as CompraItem[]) {
       if (it.product_id) {
-        await supabase.rpc("descontar_stock", {
+        await supabase.rpc("descontar_stock_variante", {
           p_product_id: it.product_id,
+          p_talle: it.talle ?? "",
+          p_color: it.color ?? "",
           p_cantidad: it.cantidad,
         });
       }
@@ -205,11 +209,13 @@ export async function createVentaManual(input: {
 
   if (error) return { error: `No se pudo guardar la venta: ${error.message}` };
 
-  // Restar stock (solo de los ítems que referencian un producto real)
+  // Restar stock de la variante (solo ítems que referencian un producto real)
   for (const it of input.items) {
     if (it.product_id) {
-      await supabase.rpc("descontar_stock", {
+      await supabase.rpc("descontar_stock_variante", {
         p_product_id: it.product_id,
+        p_talle: it.talle ?? "",
+        p_color: it.color ?? "",
         p_cantidad: it.cantidad,
       });
     }
@@ -246,8 +252,10 @@ export async function updateVentaManual(
   if (previa?.items) {
     for (const it of previa.items as OrderItem[]) {
       if (it.product_id) {
-        await supabase.rpc("sumar_stock", {
+        await supabase.rpc("sumar_stock_variante", {
           p_product_id: it.product_id,
+          p_talle: it.talle ?? "",
+          p_color: it.color ?? "",
           p_cantidad: it.cantidad,
         });
       }
@@ -274,11 +282,13 @@ export async function updateVentaManual(
 
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
-  // Descontamos el stock de los ítems nuevos
+  // Descontamos el stock de la variante de los ítems nuevos
   for (const it of input.items) {
     if (it.product_id) {
-      await supabase.rpc("descontar_stock", {
+      await supabase.rpc("descontar_stock_variante", {
         p_product_id: it.product_id,
+        p_talle: it.talle ?? "",
+        p_color: it.color ?? "",
         p_cantidad: it.cantidad,
       });
     }
@@ -302,8 +312,10 @@ export async function deleteVentaManual(id: string): Promise<ActionResult> {
   if (venta?.items) {
     for (const it of venta.items as OrderItem[]) {
       if (it.product_id) {
-        await supabase.rpc("sumar_stock", {
+        await supabase.rpc("sumar_stock_variante", {
           p_product_id: it.product_id,
+          p_talle: it.talle ?? "",
+          p_color: it.color ?? "",
           p_cantidad: it.cantidad,
         });
       }

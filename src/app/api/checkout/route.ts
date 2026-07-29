@@ -52,6 +52,23 @@ export async function POST(request: Request) {
       (productos as Product[]).map((p) => [p.id, p]),
     );
 
+    // Stock por variante (talle + color) de los productos involucrados
+    const { data: variantes } = await supabase
+      .from("product_variantes")
+      .select("product_id, talle, color, stock")
+      .in("product_id", ids);
+    const stockVariante = new Map<string, number>();
+    (
+      (variantes as {
+        product_id: string;
+        talle: string;
+        color: string;
+        stock: number;
+      }[]) ?? []
+    ).forEach((v) =>
+      stockVariante.set(`${v.product_id}|${v.talle}|${v.color}`, v.stock),
+    );
+
     // Construimos los ítems con datos y precios de la base
     const orderItems: OrderItem[] = [];
     for (const item of entrada) {
@@ -64,7 +81,12 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      if (prod.stock < cantidad) {
+      // Verificamos el stock de la variante exacta (si existe); si no, el total.
+      const keyVar = `${item.productId}|${item.talle ?? ""}|${item.color ?? ""}`;
+      const disponible = stockVariante.has(keyVar)
+        ? stockVariante.get(keyVar)!
+        : prod.stock;
+      if (disponible < cantidad) {
         return NextResponse.json(
           { error: `No hay stock suficiente de "${prod.nombre}".` },
           { status: 400 },

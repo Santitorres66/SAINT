@@ -101,8 +101,11 @@ export async function POST(request: Request) {
     if (nuevoEstado === "approved" && !yaAprobada) {
       const items = (orden.items as OrderItem[]) ?? [];
       for (const item of items) {
-        await supabase.rpc("descontar_stock", {
+        if (!item.product_id) continue;
+        await supabase.rpc("descontar_stock_variante", {
           p_product_id: item.product_id,
+          p_talle: item.talle ?? "",
+          p_color: item.color ?? "",
           p_cantidad: item.cantidad,
         });
       }

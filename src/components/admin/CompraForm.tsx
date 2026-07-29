@@ -6,7 +6,13 @@ import type { Product, Proveedor, CompraItem } from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
 import { createCompra } from "@/app/admin/gestion-actions";
 
-type Linea = { product_id: string; cantidad: string; costo_unitario: string };
+type Linea = {
+  product_id: string;
+  talle: string;
+  color: string;
+  cantidad: string;
+  costo_unitario: string;
+};
 
 /** Formulario para cargar una compra a un proveedor (suma stock). */
 export default function CompraForm({
@@ -24,7 +30,7 @@ export default function CompraForm({
   const [fecha, setFecha] = useState(hoy);
   const [notas, setNotas] = useState("");
   const [lineas, setLineas] = useState<Linea[]>([
-    { product_id: "", cantidad: "1", costo_unitario: "" },
+    { product_id: "", talle: "", color: "", cantidad: "1", costo_unitario: "" },
   ]);
 
   function actualizar(i: number, campo: keyof Linea, valor: string) {
@@ -37,6 +43,8 @@ export default function CompraForm({
           const prod = products.find((p) => p.id === valor);
           if (prod && prod.costo > 0)
             nueva.costo_unitario = String(prod.costo);
+          nueva.talle = "";
+          nueva.color = "";
         }
         return nueva;
       }),
@@ -46,7 +54,7 @@ export default function CompraForm({
   function agregarLinea() {
     setLineas((prev) => [
       ...prev,
-      { product_id: "", cantidad: "1", costo_unitario: "" },
+      { product_id: "", talle: "", color: "", cantidad: "1", costo_unitario: "" },
     ]);
   }
   function quitarLinea(i: number) {
@@ -69,6 +77,8 @@ export default function CompraForm({
         return {
           product_id: l.product_id,
           nombre: prod.nombre,
+          talle: l.talle || null,
+          color: l.color || null,
           cantidad: Number(l.cantidad),
           costo_unitario: Number(l.costo_unitario) || 0,
         };
@@ -157,65 +167,103 @@ export default function CompraForm({
         </div>
 
         <div className="space-y-3">
-          {lineas.map((l, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-1 gap-3 rounded-xl bg-neutral-50 p-3 sm:grid-cols-[1fr_100px_140px_40px] sm:items-end"
-            >
-              <div>
-                <label className="mb-1 block text-xs text-neutral-500">
-                  Producto
-                </label>
-                <select
-                  value={l.product_id}
-                  onChange={(e) => actualizar(i, "product_id", e.target.value)}
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                >
-                  <option value="">— Elegir —</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
+          {lineas.map((l, i) => {
+            const prod = products.find((p) => p.id === l.product_id);
+            return (
+              <div key={i} className="space-y-3 rounded-xl bg-neutral-50 p-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_100px_140px_40px] sm:items-end">
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-500">
+                      Producto
+                    </label>
+                    <select
+                      value={l.product_id}
+                      onChange={(e) =>
+                        actualizar(i, "product_id", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">— Elegir —</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-500">
+                      Cantidad
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={l.cantidad}
+                      onChange={(e) => actualizar(i, "cantidad", e.target.value)}
+                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-500">
+                      Costo c/u
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={l.costo_unitario}
+                      onChange={(e) =>
+                        actualizar(i, "costo_unitario", e.target.value)
+                      }
+                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      placeholder="$"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => quitarLinea(i)}
+                    className="mb-1 h-9 rounded-lg border border-neutral-300 text-neutral-500 transition hover:bg-neutral-200"
+                    aria-label="Quitar"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Talle / color de la variante (si el producto los tiene) */}
+                {prod && (prod.talles.length > 0 || prod.colores.length > 0) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {prod.talles.length > 0 && (
+                      <select
+                        value={l.talle}
+                        onChange={(e) => actualizar(i, "talle", e.target.value)}
+                        className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      >
+                        <option value="">Talle…</option>
+                        {prod.talles.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {prod.colores.length > 0 && (
+                      <select
+                        value={l.color}
+                        onChange={(e) => actualizar(i, "color", e.target.value)}
+                        className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      >
+                        <option value="">Color…</option>
+                        {prod.colores.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="mb-1 block text-xs text-neutral-500">
-                  Cantidad
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={l.cantidad}
-                  onChange={(e) => actualizar(i, "cantidad", e.target.value)}
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-neutral-500">
-                  Costo c/u
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={l.costo_unitario}
-                  onChange={(e) =>
-                    actualizar(i, "costo_unitario", e.target.value)
-                  }
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                  placeholder="$"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => quitarLinea(i)}
-                className="mb-1 h-9 rounded-lg border border-neutral-300 text-neutral-500 transition hover:bg-neutral-200"
-                aria-label="Quitar"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button
