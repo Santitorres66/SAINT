@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrdenDetalle } from "@/lib/produccion";
 import EstadoSelectorDetalle from "@/components/admin/EstadoSelectorDetalle";
+import EliminarOrdenBtn from "@/components/admin/EliminarOrdenBtn";
 import {
   ESTADOS_PRODUCCION,
   formatNumeroOrden,
@@ -65,6 +66,7 @@ export default async function DetalleOrdenPage({
             {labelEstado(orden.estado)}
           </span>
         </div>
+        <EliminarOrdenBtn id={orden.id} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

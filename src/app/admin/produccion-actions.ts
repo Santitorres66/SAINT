@@ -208,6 +208,35 @@ export async function createOrdenProduccion(
   redirect("/admin/produccion");
 }
 
+/** Elimina una orden de producción y DEVUELVE el stock del producto. */
+export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { data: orden } = await supabase
+    .from("ordenes_produccion")
+    .select("product_id, cantidad")
+    .eq("id", id)
+    .single();
+
+  const { error } = await supabase
+    .from("ordenes_produccion")
+    .delete()
+    .eq("id", id);
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
+
+  // Devolvemos al stock lo que la orden había descontado
+  if (orden?.product_id) {
+    await supabase.rpc("sumar_stock", {
+      p_product_id: orden.product_id,
+      p_cantidad: orden.cantidad ?? 1,
+    });
+  }
+
+  revalidarProduccion();
+  return { ok: true };
+}
+
 /** Cambia el estado de una orden (desde el Kanban o el detalle) y lo registra. */
 export async function cambiarEstadoProduccion(
   id: string,
