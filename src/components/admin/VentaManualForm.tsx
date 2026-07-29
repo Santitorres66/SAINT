@@ -88,6 +88,10 @@ export default function VentaManualForm({
             nueva.nombre = prod.nombre;
             if (!nueva.precio_unitario)
               nueva.precio_unitario = String(prod.precio);
+            // Autocompletamos color/talle si hay una sola opción (para
+            // que descuente la variante correcta)
+            if (prod.colores.length === 1) nueva.color = prod.colores[0];
+            if (prod.talles.length === 1) nueva.talle = prod.talles[0];
           }
         }
         return nueva;
@@ -247,7 +251,9 @@ export default function VentaManualForm({
                   <option value="">— A mano / sin producto —</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.nombre} (stock {p.stock})
+                      {p.nombre}
+                      {p.colores.length > 0 ? ` · ${p.colores.join("/")}` : ""}{" "}
+                      (stock {p.stock})
                     </option>
                   ))}
                 </select>

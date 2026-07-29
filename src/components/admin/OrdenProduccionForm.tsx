@@ -70,9 +70,10 @@ export default function OrdenProduccionForm({
 
   function elegirProducto(id: string) {
     setProductId(id);
-    setTalle("");
-    setColor("");
     const prod = products.find((p) => p.id === id);
+    // Autocompletamos talle/color si el producto tiene una sola opción
+    setTalle(prod && prod.talles.length === 1 ? prod.talles[0] : "");
+    setColor(prod && prod.colores.length === 1 ? prod.colores[0] : "");
     if (prod) {
       setPrenda(prod.nombre);
       setTipoPrenda(labelCategoria(prod.categoria));
@@ -221,7 +222,9 @@ export default function OrdenProduccionForm({
             <option value="">— Sin producto (escribir a mano) —</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.nombre} — stock {p.stock}
+                {p.nombre}
+                {p.colores.length > 0 ? ` · ${p.colores.join("/")}` : ""} — stock{" "}
+                {p.stock}
               </option>
             ))}
           </select>

@@ -43,8 +43,8 @@ export default function CompraForm({
           const prod = products.find((p) => p.id === valor);
           if (prod && prod.costo > 0)
             nueva.costo_unitario = String(prod.costo);
-          nueva.talle = "";
-          nueva.color = "";
+          nueva.talle = prod && prod.talles.length === 1 ? prod.talles[0] : "";
+          nueva.color = prod && prod.colores.length === 1 ? prod.colores[0] : "";
         }
         return nueva;
       }),
@@ -187,6 +187,9 @@ export default function CompraForm({
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.nombre}
+                          {p.colores.length > 0
+                            ? ` · ${p.colores.join("/")}`
+                            : ""}
                         </option>
                       ))}
                     </select>
