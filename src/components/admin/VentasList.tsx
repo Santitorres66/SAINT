@@ -20,6 +20,12 @@ export default function VentasList({ ventas }: { ventas: VentaUnificada[] }) {
   const [pending, startTransition] = useTransition();
   const [aBorrar, setABorrar] = useState<VentaUnificada | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canal, setCanal] = useState<"todas" | "online" | "manual">("todas");
+
+  const nOnline = ventas.filter((v) => v.canal === "online").length;
+  const nManual = ventas.filter((v) => v.canal === "manual").length;
+  const visibles =
+    canal === "todas" ? ventas : ventas.filter((v) => v.canal === canal);
 
   function confirmarBorrado() {
     if (!aBorrar) return;
@@ -57,8 +63,36 @@ export default function VentasList({ ventas }: { ventas: VentaUnificada[] }) {
         </p>
       )}
 
-      <ul className="space-y-4">
-        {ventas.map((v) => (
+      {/* Filtro por canal */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(
+          [
+            ["todas", `Todas (${ventas.length})`],
+            ["online", `Tienda web (${nOnline})`],
+            ["manual", `Manuales (${nManual})`],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setCanal(k)}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+              canal === k
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-300 text-neutral-600 hover:bg-neutral-100"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {visibles.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
+          No hay ventas de ese tipo.
+        </p>
+      ) : (
+        <ul className="space-y-4">
+          {visibles.map((v) => (
           <li
             key={`${v.canal}-${v.id}`}
             className="rounded-2xl border border-neutral-200 bg-white p-5"
@@ -127,8 +161,9 @@ export default function VentasList({ ventas }: { ventas: VentaUnificada[] }) {
               ))}
             </ul>
           </li>
-        ))}
-      </ul>
+          ))}
+        </ul>
+      )}
 
       {aBorrar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
