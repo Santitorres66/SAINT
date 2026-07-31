@@ -1,60 +1,26 @@
 import Link from "next/link";
-import { getDashboardStats } from "@/lib/gestion";
+import AnaliticaVentas from "@/components/admin/AnaliticaVentas";
+import { getDashboardStats, getVentasParaAnalitica } from "@/lib/gestion";
 import { formatPrecio } from "@/lib/constants";
 
-/** TABLERO: resumen del negocio (ventas, compras, ganancia, stock bajo). */
+/** TABLERO: analítica de ventas (con filtro de fecha) + stock y capital. */
 export default async function TableroPage() {
-  const stats = await getDashboardStats();
-
-  const tarjetas = [
-    {
-      label: "Ventas del mes",
-      valor: formatPrecio(stats.ventasMesTotal),
-      detalle: `${stats.ventasMesCantidad} ventas`,
-      color: "text-green-700",
-    },
-    {
-      label: "Ganancia estimada",
-      valor: formatPrecio(stats.gananciaMesEstimada),
-      detalle: "precio de venta − costo",
-      color: "text-emerald-700",
-    },
-    {
-      label: "Compras del mes",
-      valor: formatPrecio(stats.comprasMesTotal),
-      detalle: "a proveedores",
-      color: "text-blue-700",
-    },
-    {
-      label: "Productos activos",
-      valor: String(stats.productosActivos),
-      detalle: "visibles en la web",
-      color: "text-neutral-900",
-    },
-  ];
+  const [stats, ventas] = await Promise.all([
+    getDashboardStats(),
+    getVentasParaAnalitica(),
+  ]);
 
   return (
     <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-semibold text-neutral-900">Tablero</h1>
         <p className="mt-1 text-neutral-500">
-          Un vistazo rápido a tu negocio este mes.
+          Filtrá por período y mirá cómo viene tu negocio.
         </p>
       </div>
 
-      {/* Tarjetas de números */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {tarjetas.map((t) => (
-          <div
-            key={t.label}
-            className="rounded-2xl border border-neutral-200 bg-white p-5"
-          >
-            <p className="text-sm text-neutral-500">{t.label}</p>
-            <p className={`mt-2 text-2xl font-semibold ${t.color}`}>{t.valor}</p>
-            <p className="mt-1 text-xs text-neutral-400">{t.detalle}</p>
-          </div>
-        ))}
-      </div>
+      {/* Analítica de ventas (KPIs + gráfico, con filtro de fecha) */}
+      <AnaliticaVentas ventas={ventas} />
 
       {/* Stock valorizado (capital) */}
       <div className="rounded-2xl border border-neutral-200 bg-gradient-to-br from-neutral-900 to-neutral-700 p-6 text-white">
@@ -65,7 +31,8 @@ export default async function TableroPage() {
           {formatPrecio(stats.stockValorizadoCosto)}
         </p>
         <p className="mt-1 text-sm text-white/60">
-          a precio de costo · {stats.unidadesEnStock} unidades en stock
+          a precio de costo · {stats.unidadesEnStock} unidades en stock ·{" "}
+          {stats.productosActivos} productos activos
         </p>
         <p className="mt-3 border-t border-white/15 pt-3 text-sm text-white/80">
           Valor a precio de venta:{" "}
@@ -108,10 +75,7 @@ export default async function TableroPage() {
         ) : (
           <ul className="mt-4 divide-y divide-neutral-100">
             {stats.stockBajo.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between py-3"
-              >
+              <li key={p.id} className="flex items-center justify-between py-3">
                 <Link
                   href={`/admin/editar/${p.id}`}
                   className="font-medium text-neutral-800 hover:underline"

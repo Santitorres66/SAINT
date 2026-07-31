@@ -129,6 +129,42 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
 
 /* ------------------------------- Tablero --------------------------------- */
 
+/** Ventas (online aprobadas + manuales) para el análisis del tablero. */
+export async function getVentasParaAnalitica(): Promise<
+  { fecha: string; total: number; cliente: string }[]
+> {
+  const supabase = await createClient();
+  const [{ data: orders }, { data: manuales }] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("created_at, total, comprador")
+      .eq("status", "approved"),
+    supabase.from("ventas").select("fecha, total, cliente"),
+  ]);
+
+  const online = (
+    (orders as {
+      created_at: string;
+      total: number;
+      comprador: { nombre?: string; email?: string } | null;
+    }[]) ?? []
+  ).map((o) => ({
+    fecha: o.created_at,
+    total: Number(o.total),
+    cliente: o.comprador?.email || o.comprador?.nombre || "Cliente web",
+  }));
+
+  const man = (
+    (manuales as { fecha: string; total: number; cliente: string }[]) ?? []
+  ).map((v) => ({
+    fecha: v.fecha,
+    total: Number(v.total),
+    cliente: v.cliente || "",
+  }));
+
+  return [...online, ...man];
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const supabase = await createClient();
   const now = new Date();
