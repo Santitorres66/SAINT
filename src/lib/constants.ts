@@ -83,6 +83,43 @@ export function formatNumeroOrden(n: number): string {
   return "#" + String(n).padStart(5, "0");
 }
 
+/* --- Tablas de talles (medidas de la prenda en cm) --- */
+type FilaTalle = { talle: string; ancho: string; largo: string };
+type TablaTalles = { titulo: string; filas: FilaTalle[] };
+
+export const TABLAS_TALLES: Record<string, TablaTalles> = {
+  remera: {
+    titulo: "Remera Oversize",
+    filas: [
+      { talle: "S", ancho: "57 cm", largo: "78 cm" },
+      { talle: "M", ancho: "59 cm", largo: "80 cm" },
+      { talle: "L", ancho: "62 cm", largo: "82 cm" },
+      { talle: "XL", ancho: "65 cm", largo: "84 cm" },
+    ],
+  },
+  buzo: {
+    titulo: "Buzo Oversize",
+    filas: [
+      { talle: "S", ancho: "64 cm", largo: "73 cm" },
+      { talle: "M", ancho: "67 cm", largo: "75 cm" },
+      { talle: "L", ancho: "70 cm", largo: "77 cm" },
+      { talle: "XL", ancho: "73 cm", largo: "79 cm" },
+    ],
+  },
+};
+
+/** Devuelve la tabla de talles que corresponde a una categoría. */
+export function tablaTallesDe(categoria: string): TablaTalles | null {
+  const mapa: Record<string, keyof typeof TABLAS_TALLES> = {
+    remera: "remera",
+    crop: "remera",
+    buzo: "buzo",
+    canguro: "buzo",
+  };
+  const key = mapa[categoria];
+  return key ? TABLAS_TALLES[key] : null;
+}
+
 /** Formatea un precio en pesos argentinos (sin centavos). */
 export function formatPrecio(valor: number): string {
   return new Intl.NumberFormat("es-AR", {

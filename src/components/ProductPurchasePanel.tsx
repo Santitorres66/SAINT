@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Product, ProductVariante } from "@/lib/types";
 import { formatPrecio, whatsappLink } from "@/lib/constants";
 import { useCart } from "@/lib/cart/CartContext";
+import SizeChart from "@/components/SizeChart";
 
 /**
  * Panel de compra del detalle de producto: selección de talle y color
@@ -129,9 +130,12 @@ export default function ProductPurchasePanel({
       {/* Talles */}
       {necesitaTalle && (
         <div className="space-y-3">
-          <p className="text-xs uppercase tracking-wide2 text-saint-gray">
-            Talle
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-wide2 text-saint-gray">
+              Talle
+            </p>
+            <SizeChart categoria={product.categoria} />
+          </div>
           <div className="flex flex-wrap gap-2">
             {product.talles.map((t) => {
               const disp = talleDisponible(t);
