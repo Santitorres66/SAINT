@@ -1,15 +1,16 @@
 import Link from "next/link";
 import OrdenProduccionForm from "@/components/admin/OrdenProduccionForm";
-import { getAllProductsAdmin } from "@/lib/products";
+import { getAllProductsAdmin, getAllVariantes } from "@/lib/products";
 import { getMatricesSimple } from "@/lib/produccion";
 import { getClientes } from "@/lib/clientes";
 
 /** Alta de una orden de producción. */
 export default async function NuevaOrdenPage() {
-  const [products, matrices, clientes] = await Promise.all([
+  const [products, matrices, clientes, variantes] = await Promise.all([
     getAllProductsAdmin(),
     getMatricesSimple(),
     getClientes(),
+    getAllVariantes(),
   ]);
 
   return (
@@ -27,6 +28,7 @@ export default async function NuevaOrdenPage() {
         products={products}
         matrices={matrices}
         clientes={clientes}
+        variantes={variantes}
       />
     </div>
   );

@@ -28,6 +28,7 @@ export default function ProductosView({
   const [perdidaDe, setPerdidaDe] = useState<Product | null>(null);
 
   const [busca, setBusca] = useState("");
+  const [fProducto, setFProducto] = useState("");
   const [fColor, setFColor] = useState("");
   const [fTalle, setFTalle] = useState("");
   const [orden, setOrden] = useState<Orden>("precio_desc");
@@ -42,6 +43,7 @@ export default function ProductosView({
     return m;
   }, [variantes]);
 
+  const productosUnicos = [...new Set(products.map((p) => p.nombre))].sort();
   const coloresUnicos = [...new Set(products.flatMap((p) => p.colores))].sort();
   const tallesUnicos = [...new Set(products.flatMap((p) => p.talles))].sort();
 
@@ -49,6 +51,7 @@ export default function ProductosView({
     const r = products.filter((p) => {
       if (busca && !p.nombre.toLowerCase().includes(busca.toLowerCase()))
         return false;
+      if (fProducto && p.nombre !== fProducto) return false;
       if (fColor && !p.colores.includes(fColor)) return false;
       if (fTalle && !p.talles.includes(fTalle)) return false;
       return true;
@@ -62,7 +65,7 @@ export default function ProductosView({
             ? a.stock - b.stock
             : a.nombre.localeCompare(b.nombre),
     );
-  }, [products, busca, fColor, fTalle, orden]);
+  }, [products, busca, fProducto, fColor, fTalle, orden]);
 
   // Stock a mostrar según los filtros: si filtrás color/talle, muestra el
   // stock de esa variante; si no, el total del producto.
@@ -77,7 +80,7 @@ export default function ProductosView({
       .reduce((a, v) => a + v.stock, 0);
   }
 
-  const hayFiltros = Boolean(busca || fColor || fTalle);
+  const hayFiltros = Boolean(busca || fProducto || fColor || fTalle);
   const valorVenta = filtrados.reduce((a, p) => a + stockMostrado(p) * p.precio, 0);
   const valorCosto = filtrados.reduce(
     (a, p) => a + stockMostrado(p) * (p.costo || 0),
@@ -140,6 +143,18 @@ export default function ProductosView({
           className="flex-1 rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
         />
         <select
+          value={fProducto}
+          onChange={(e) => setFProducto(e.target.value)}
+          className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+        >
+          <option value="">Todos los productos</option>
+          {productosUnicos.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <select
           value={fColor}
           onChange={(e) => setFColor(e.target.value)}
           className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
@@ -178,6 +193,7 @@ export default function ProductosView({
             type="button"
             onClick={() => {
               setBusca("");
+              setFProducto("");
               setFColor("");
               setFTalle("");
             }}

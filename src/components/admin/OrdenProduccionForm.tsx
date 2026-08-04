@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import type { Product, Matriz, Cliente } from "@/lib/types";
+import type { Product, Matriz, Cliente, ProductVariante } from "@/lib/types";
 import { nombreCompleto } from "@/lib/types";
 import { formatPrecio, labelCategoria } from "@/lib/constants";
 import { createOrdenProduccion } from "@/app/admin/produccion-actions";
@@ -15,10 +15,12 @@ export default function OrdenProduccionForm({
   products,
   matrices,
   clientes,
+  variantes,
 }: {
   products: Product[];
   matrices: Matriz[];
   clientes: Cliente[];
+  variantes: ProductVariante[];
 }) {
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +37,7 @@ export default function OrdenProduccionForm({
     if (c) setCliente(nombreCompleto(c));
   }
   const [fecha, setFecha] = useState(hoy);
+  const [modelo, setModelo] = useState(""); // nombre del producto (o "__mano__")
   const [productId, setProductId] = useState("");
   const [prenda, setPrenda] = useState("");
   const [tipoPrenda, setTipoPrenda] = useState("");
@@ -68,20 +71,68 @@ export default function OrdenProduccionForm({
   const [costoBordado, setCostoBordado] = useState("");
   const [otrosCostos, setOtrosCostos] = useState("");
 
-  function elegirProducto(id: string) {
-    setProductId(id);
-    const prod = products.find((p) => p.id === id);
-    // Autocompletamos talle/color si el producto tiene una sola opción
-    setTalle(prod && prod.talles.length === 1 ? prod.talles[0] : "");
-    setColor(prod && prod.colores.length === 1 ? prod.colores[0] : "");
-    if (prod) {
-      setPrenda(prod.nombre);
-      setTipoPrenda(labelCategoria(prod.categoria));
-      setCostoPrenda(String(prod.costo || ""));
+  // Cascada: modelo (nombre) → color (producto) → talle (variante), solo con stock
+  const modelos = useMemo(() => {
+    const m = new Map<
+      string,
+      { nombre: string; categoria: string; stock: number }
+    >();
+    products.forEach((p) => {
+      const e = m.get(p.nombre) ?? {
+        nombre: p.nombre,
+        categoria: p.categoria,
+        stock: 0,
+      };
+      e.stock += p.stock;
+      m.set(p.nombre, e);
+    });
+    return [...m.values()]
+      .filter((x) => x.stock > 0)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [products]);
+
+  const coloresModelo = useMemo(() => {
+    if (!modelo || modelo === "__mano__") return [];
+    return products
+      .filter((p) => p.nombre === modelo && p.stock > 0)
+      .map((p) => ({ color: p.colores[0] ?? "", productId: p.id, stock: p.stock }))
+      .sort((a, b) => a.color.localeCompare(b.color));
+  }, [products, modelo]);
+
+  const tallesColor = useMemo(() => {
+    if (!productId) return [];
+    return variantes
+      .filter((v) => v.product_id === productId && v.stock > 0)
+      .map((v) => ({ talle: v.talle, stock: v.stock }))
+      .sort((a, b) => a.talle.localeCompare(b.talle));
+  }, [variantes, productId]);
+
+  const esManual = modelo === "__mano__";
+
+  function elegirModelo(v: string) {
+    setColor("");
+    setTalle("");
+    setProductId("");
+    if (v === "__mano__") {
+      setModelo("__mano__");
+      setPrenda("");
+      setTipoPrenda("");
+      return;
     }
+    setModelo(v);
+    const first = products.find((p) => p.nombre === v);
+    setPrenda(v);
+    setTipoPrenda(first ? labelCategoria(first.categoria) : "");
   }
 
-  const productoElegido = products.find((p) => p.id === productId);
+  function elegirColorProducto(pid: string) {
+    setProductId(pid);
+    const p = products.find((x) => x.id === pid);
+    setColor(p?.colores[0] ?? "");
+    setCostoPrenda(String(p?.costo || ""));
+    const ts = variantes.filter((v) => v.product_id === pid && v.stock > 0);
+    setTalle(ts.length === 1 ? ts[0].talle : "");
+  }
 
   function cambiarMatrizModo(modo: MatrizModo) {
     setMatrizModo(modo);
@@ -99,6 +150,17 @@ export default function OrdenProduccionForm({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!esManual && modelo) {
+      if (!productId) {
+        setError("Elegí el color de la prenda.");
+        return;
+      }
+      if (tallesColor.length > 0 && !talle) {
+        setError("Elegí el talle.");
+        return;
+      }
+    }
 
     if (matrizModo === "existente" && !matrizId) {
       setError("Elegí una matriz de la lista o cambiá la opción.");
@@ -212,105 +274,129 @@ export default function OrdenProduccionForm({
           </div>
         </div>
 
+        {/* 1) Modelo (siempre trae lo que hay en stock) */}
         <div>
-          <label className={label}>Prenda (elegí un producto o escribila)</label>
+          <label className={label}>Prenda</label>
           <select
-            value={productId}
-            onChange={(e) => elegirProducto(e.target.value)}
-            className={input + " mb-2"}
+            value={modelo}
+            onChange={(e) => elegirModelo(e.target.value)}
+            className={input}
           >
-            <option value="">— Sin producto (escribir a mano) —</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-                {p.colores.length > 0 ? ` · ${p.colores.join("/")}` : ""} — stock{" "}
-                {p.stock}
+            <option value="">— Elegí la prenda —</option>
+            {modelos.map((m) => (
+              <option key={m.nombre} value={m.nombre}>
+                {m.nombre} — {m.stock} en stock
               </option>
             ))}
+            <option value="__mano__">Otra (escribir a mano)</option>
           </select>
-          {productoElegido && (
-            <p className="mt-1 text-xs text-neutral-500">
-              Al crear la orden se descuenta del stock. Disponible:{" "}
-              <strong>{productoElegido.stock}</strong>
-            </p>
-          )}
-          <input
-            value={prenda}
-            onChange={(e) => setPrenda(e.target.value)}
-            className={input}
-            placeholder="Nombre de la prenda"
-          />
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-4">
-          <div>
-            <label className={label}>Tipo de prenda</label>
-            <input
-              value={tipoPrenda}
-              onChange={(e) => setTipoPrenda(e.target.value)}
-              className={input}
-              placeholder="Ej: Remera"
-            />
-          </div>
-          <div>
-            <label className={label}>Talle</label>
-            {productoElegido && productoElegido.talles.length > 0 ? (
-              <select
-                value={talle}
-                onChange={(e) => setTalle(e.target.value)}
-                className={input}
-              >
-                <option value="">Elegir talle</option>
-                {productoElegido.talles.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            ) : (
+        {/* 2) A mano */}
+        {esManual && (
+          <div className="space-y-6">
+            <div>
+              <label className={label}>Nombre de la prenda</label>
               <input
-                value={talle}
-                onChange={(e) => setTalle(e.target.value)}
+                value={prenda}
+                onChange={(e) => setPrenda(e.target.value)}
                 className={input}
-                placeholder="Ej: L"
+                placeholder="Ej: Remera oversize"
               />
-            )}
+            </div>
+            <div className="grid gap-6 sm:grid-cols-4">
+              <div>
+                <label className={label}>Tipo de prenda</label>
+                <input
+                  value={tipoPrenda}
+                  onChange={(e) => setTipoPrenda(e.target.value)}
+                  className={input}
+                  placeholder="Ej: Remera"
+                />
+              </div>
+              <div>
+                <label className={label}>Talle</label>
+                <input
+                  value={talle}
+                  onChange={(e) => setTalle(e.target.value)}
+                  className={input}
+                  placeholder="Ej: L"
+                />
+              </div>
+              <div>
+                <label className={label}>Color</label>
+                <input
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  className={input}
+                  placeholder="Ej: Negro"
+                />
+              </div>
+              <div>
+                <label className={label}>Cantidad</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={cantidad}
+                  onChange={(e) => setCantidad(e.target.value)}
+                  className={input}
+                />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className={label}>Color</label>
-            {productoElegido && productoElegido.colores.length > 0 ? (
+        )}
+
+        {/* 2) Con producto: color → talle (solo con stock) */}
+        {modelo && !esManual && (
+          <div className="grid gap-6 sm:grid-cols-4">
+            <div>
+              <label className={label}>Color</label>
               <select
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
+                value={productId}
+                onChange={(e) => elegirColorProducto(e.target.value)}
                 className={input}
               >
                 <option value="">Elegir color</option>
-                {productoElegido.colores.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                {coloresModelo.map((c) => (
+                  <option key={c.productId} value={c.productId}>
+                    {c.color || "—"} ({c.stock} en stock)
                   </option>
                 ))}
               </select>
-            ) : (
-              <input
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
+            </div>
+            <div>
+              <label className={label}>Talle</label>
+              <select
+                value={talle}
+                onChange={(e) => setTalle(e.target.value)}
                 className={input}
-                placeholder="Ej: Negro"
+                disabled={!productId}
+              >
+                <option value="">Elegir talle</option>
+                {tallesColor.map((t) => (
+                  <option key={t.talle} value={t.talle}>
+                    {t.talle || "Único"} ({t.stock} en stock)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={label}>Cantidad</label>
+              <input
+                type="number"
+                min="1"
+                value={cantidad}
+                onChange={(e) => setCantidad(e.target.value)}
+                className={input}
               />
-            )}
+            </div>
+            <div className="flex items-end pb-1">
+              <p className="text-xs text-neutral-500">
+                Se descuenta esta variante del stock al crear la orden.
+              </p>
+            </div>
           </div>
-          <div>
-            <label className={label}>Cantidad</label>
-            <input
-              type="number"
-              min="1"
-              value={cantidad}
-              onChange={(e) => setCantidad(e.target.value)}
-              className={input}
-            />
-          </div>
-        </div>
+        )}
       </section>
 
       {/* BORDADO */}
