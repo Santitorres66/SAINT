@@ -212,6 +212,101 @@ export async function createOrdenProduccion(
   redirect("/admin/produccion");
 }
 
+type EditarOrdenInput = {
+  pedido_referencia: string;
+  cliente: string;
+  cliente_id: string | null;
+  fecha: string;
+  bordado_descripcion: string;
+  bordado_ubicacion: string;
+  bordado_tamano: string;
+  bordado_colores: number;
+  observaciones: string;
+  imagen_ref_path: string | null;
+  archivo_bordado_path: string | null;
+  matriz_modo: "ninguna" | "existente" | "nueva";
+  matriz_id: string | null;
+  matriz_nueva: {
+    nombre: string;
+    costo: number;
+    observaciones: string;
+    imagen_path: string | null;
+    archivo_path: string | null;
+  } | null;
+  costo_prenda: number;
+  costo_matriz: number;
+  costo_bordado: number;
+  otros_costos: number;
+};
+
+/**
+ * Edita los datos de una orden ya creada (bordado, archivos, matriz, costos).
+ * No toca prenda/talle/color/cantidad ni el estado: esos ya afectaron el
+ * stock o el Kanban y se manejan por sus propios flujos.
+ */
+export async function updateOrdenProduccion(
+  id: string,
+  input: EditarOrdenInput,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  // Resolver la matriz (misma lógica que al crear la orden)
+  let matrizId: string | null = null;
+  if (input.matriz_modo === "existente") {
+    matrizId = input.matriz_id;
+  } else if (input.matriz_modo === "nueva" && input.matriz_nueva?.nombre?.trim()) {
+    const { data: m, error: mErr } = await supabase
+      .from("matrices")
+      .insert({
+        nombre: input.matriz_nueva.nombre.trim(),
+        costo: input.matriz_nueva.costo ?? 0,
+        observaciones: input.matriz_nueva.observaciones?.trim() ?? "",
+        imagen_path: input.matriz_nueva.imagen_path,
+        archivo_path: input.matriz_nueva.archivo_path,
+      })
+      .select("id")
+      .single();
+    if (mErr || !m) return { error: `No se pudo crear la matriz: ${mErr?.message}` };
+    matrizId = m.id;
+  }
+
+  const costo_total =
+    (input.costo_prenda || 0) +
+    (input.costo_matriz || 0) +
+    (input.costo_bordado || 0) +
+    (input.otros_costos || 0);
+
+  const { error } = await supabase
+    .from("ordenes_produccion")
+    .update({
+      pedido_referencia: input.pedido_referencia?.trim() ?? "",
+      cliente: input.cliente?.trim() ?? "",
+      cliente_id: input.cliente_id,
+      fecha: input.fecha || new Date().toISOString(),
+      bordado_descripcion: input.bordado_descripcion?.trim() ?? "",
+      bordado_ubicacion: input.bordado_ubicacion?.trim() ?? "",
+      bordado_tamano: input.bordado_tamano?.trim() ?? "",
+      bordado_colores: input.bordado_colores || 0,
+      observaciones: input.observaciones?.trim() ?? "",
+      imagen_ref_path: input.imagen_ref_path,
+      archivo_bordado_path: input.archivo_bordado_path,
+      matriz_id: matrizId,
+      costo_prenda: input.costo_prenda || 0,
+      costo_matriz: input.costo_matriz || 0,
+      costo_bordado: input.costo_bordado || 0,
+      otros_costos: input.otros_costos || 0,
+      costo_total,
+    })
+    .eq("id", id);
+
+  if (error) return { error: `No se pudo guardar los cambios: ${error.message}` };
+
+  revalidarProduccion();
+  revalidatePath(`/admin/produccion/${id}`);
+  redirect(`/admin/produccion/${id}`);
+}
+
 /** Elimina una orden de producción y DEVUELVE el stock del producto. */
 export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
   const { supabase, user } = await requireUser();

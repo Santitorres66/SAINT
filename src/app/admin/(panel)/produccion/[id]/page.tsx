@@ -66,7 +66,15 @@ export default async function DetalleOrdenPage({
             {labelEstado(orden.estado)}
           </span>
         </div>
-        <EliminarOrdenBtn id={orden.id} />
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/admin/produccion/${orden.id}/editar`}
+            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+          >
+            Editar
+          </Link>
+          <EliminarOrdenBtn id={orden.id} />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

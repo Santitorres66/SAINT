@@ -108,6 +108,12 @@ function Tarjeta({
           ))}
         </select>
         <Link
+          href={`/admin/produccion/${orden.id}/editar`}
+          className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100"
+        >
+          Editar
+        </Link>
+        <Link
           href={`/admin/produccion/${orden.id}`}
           className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100"
         >

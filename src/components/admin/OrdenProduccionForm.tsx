@@ -2,41 +2,54 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import type { Product, Matriz, Cliente, ProductVariante } from "@/lib/types";
+import type {
+  Product,
+  Matriz,
+  Cliente,
+  ProductVariante,
+  OrdenProduccionVista,
+} from "@/lib/types";
 import { nombreCompleto } from "@/lib/types";
 import { formatPrecio, labelCategoria } from "@/lib/constants";
-import { createOrdenProduccion } from "@/app/admin/produccion-actions";
+import {
+  createOrdenProduccion,
+  updateOrdenProduccion,
+} from "@/app/admin/produccion-actions";
 import ProduccionFileInput from "./ProduccionFileInput";
 
 type MatrizModo = "ninguna" | "existente" | "nueva";
 
-/** Formulario para crear una orden de producción de bordado. */
+/** Formulario para crear o editar una orden de producción de bordado. */
 export default function OrdenProduccionForm({
   products,
   matrices,
   clientes,
   variantes,
+  orden,
 }: {
   products: Product[];
   matrices: Matriz[];
   clientes: Cliente[];
   variantes: ProductVariante[];
+  /** Si se pasa, el formulario edita esta orden en vez de crear una nueva. */
+  orden?: OrdenProduccionVista;
 }) {
+  const editando = Boolean(orden);
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const hoy = new Date().toISOString().slice(0, 10);
 
   // Pedido
-  const [pedidoRef, setPedidoRef] = useState("");
-  const [cliente, setCliente] = useState("");
-  const [clienteId, setClienteId] = useState("");
+  const [pedidoRef, setPedidoRef] = useState(orden?.pedido_referencia ?? "");
+  const [cliente, setCliente] = useState(orden?.cliente ?? "");
+  const [clienteId, setClienteId] = useState(orden?.cliente_id ?? "");
 
   function elegirCliente(id: string) {
     setClienteId(id);
     const c = clientes.find((x) => x.id === id);
     if (c) setCliente(nombreCompleto(c));
   }
-  const [fecha, setFecha] = useState(hoy);
+  const [fecha, setFecha] = useState(orden?.fecha?.slice(0, 10) ?? hoy);
   const [modelo, setModelo] = useState(""); // nombre del producto (o "__mano__")
   const [productId, setProductId] = useState("");
   const [prenda, setPrenda] = useState("");
@@ -46,19 +59,29 @@ export default function OrdenProduccionForm({
   const [cantidad, setCantidad] = useState("1");
 
   // Bordado
-  const [bDescripcion, setBDescripcion] = useState("");
-  const [bUbicacion, setBUbicacion] = useState("");
-  const [bTamano, setBTamano] = useState("");
-  const [bColores, setBColores] = useState("");
-  const [observaciones, setObservaciones] = useState("");
+  const [bDescripcion, setBDescripcion] = useState(
+    orden?.bordado_descripcion ?? "",
+  );
+  const [bUbicacion, setBUbicacion] = useState(orden?.bordado_ubicacion ?? "");
+  const [bTamano, setBTamano] = useState(orden?.bordado_tamano ?? "");
+  const [bColores, setBColores] = useState(
+    orden?.bordado_colores ? String(orden.bordado_colores) : "",
+  );
+  const [observaciones, setObservaciones] = useState(orden?.observaciones ?? "");
 
   // Archivos
-  const [imagenRef, setImagenRef] = useState<string | null>(null);
-  const [archivoBordado, setArchivoBordado] = useState<string | null>(null);
+  const [imagenRef, setImagenRef] = useState<string | null>(
+    orden?.imagen_ref_path ?? null,
+  );
+  const [archivoBordado, setArchivoBordado] = useState<string | null>(
+    orden?.archivo_bordado_path ?? null,
+  );
 
   // Matriz
-  const [matrizModo, setMatrizModo] = useState<MatrizModo>("ninguna");
-  const [matrizId, setMatrizId] = useState("");
+  const [matrizModo, setMatrizModo] = useState<MatrizModo>(
+    orden?.matriz_id ? "existente" : "ninguna",
+  );
+  const [matrizId, setMatrizId] = useState(orden?.matriz_id ?? "");
   const [mNombre, setMNombre] = useState("");
   const [mCosto, setMCosto] = useState("");
   const [mObs, setMObs] = useState("");
@@ -66,10 +89,18 @@ export default function OrdenProduccionForm({
   const [mArchivo, setMArchivo] = useState<string | null>(null);
 
   // Costos
-  const [costoPrenda, setCostoPrenda] = useState("");
-  const [costoMatriz, setCostoMatriz] = useState("");
-  const [costoBordado, setCostoBordado] = useState("");
-  const [otrosCostos, setOtrosCostos] = useState("");
+  const [costoPrenda, setCostoPrenda] = useState(
+    orden?.costo_prenda ? String(orden.costo_prenda) : "",
+  );
+  const [costoMatriz, setCostoMatriz] = useState(
+    orden?.costo_matriz ? String(orden.costo_matriz) : "",
+  );
+  const [costoBordado, setCostoBordado] = useState(
+    orden?.costo_bordado ? String(orden.costo_bordado) : "",
+  );
+  const [otrosCostos, setOtrosCostos] = useState(
+    orden?.otros_costos ? String(orden.otros_costos) : "",
+  );
 
   // Cascada: modelo (nombre) → color (producto) → talle (variante), solo con stock
   const modelos = useMemo(() => {
@@ -151,7 +182,7 @@ export default function OrdenProduccionForm({
     e.preventDefault();
     setError(null);
 
-    if (!esManual && modelo) {
+    if (!editando && !esManual && modelo) {
       if (!productId) {
         setError("Elegí el color de la prenda.");
         return;
@@ -171,42 +202,48 @@ export default function OrdenProduccionForm({
       return;
     }
 
+    const comun = {
+      pedido_referencia: pedidoRef,
+      cliente,
+      cliente_id: clienteId || null,
+      fecha,
+      bordado_descripcion: bDescripcion,
+      bordado_ubicacion: bUbicacion,
+      bordado_tamano: bTamano,
+      bordado_colores: Number(bColores) || 0,
+      observaciones,
+      imagen_ref_path: imagenRef,
+      archivo_bordado_path: archivoBordado,
+      matriz_modo: matrizModo,
+      matriz_id: matrizModo === "existente" ? matrizId : null,
+      matriz_nueva:
+        matrizModo === "nueva"
+          ? {
+              nombre: mNombre,
+              costo: Number(mCosto) || 0,
+              observaciones: mObs,
+              imagen_path: mImagen,
+              archivo_path: mArchivo,
+            }
+          : null,
+      costo_prenda: Number(costoPrenda) || 0,
+      costo_matriz: Number(costoMatriz) || 0,
+      costo_bordado: Number(costoBordado) || 0,
+      otros_costos: Number(otrosCostos) || 0,
+    };
+
     startTransition(async () => {
-      const res = await createOrdenProduccion({
-        pedido_referencia: pedidoRef,
-        cliente,
-        cliente_id: clienteId || null,
-        fecha,
-        product_id: productId || null,
-        prenda,
-        tipo_prenda: tipoPrenda,
-        talle,
-        color,
-        cantidad: Number(cantidad) || 1,
-        bordado_descripcion: bDescripcion,
-        bordado_ubicacion: bUbicacion,
-        bordado_tamano: bTamano,
-        bordado_colores: Number(bColores) || 0,
-        observaciones,
-        imagen_ref_path: imagenRef,
-        archivo_bordado_path: archivoBordado,
-        matriz_modo: matrizModo,
-        matriz_id: matrizModo === "existente" ? matrizId : null,
-        matriz_nueva:
-          matrizModo === "nueva"
-            ? {
-                nombre: mNombre,
-                costo: Number(mCosto) || 0,
-                observaciones: mObs,
-                imagen_path: mImagen,
-                archivo_path: mArchivo,
-              }
-            : null,
-        costo_prenda: Number(costoPrenda) || 0,
-        costo_matriz: Number(costoMatriz) || 0,
-        costo_bordado: Number(costoBordado) || 0,
-        otros_costos: Number(otrosCostos) || 0,
-      });
+      const res = editando
+        ? await updateOrdenProduccion(orden!.id, comun)
+        : await createOrdenProduccion({
+            ...comun,
+            product_id: productId || null,
+            prenda,
+            tipo_prenda: tipoPrenda,
+            talle,
+            color,
+            cantidad: Number(cantidad) || 1,
+          });
       if (res?.error) setError(res.error);
     });
   }
@@ -274,26 +311,49 @@ export default function OrdenProduccionForm({
           </div>
         </div>
 
-        {/* 1) Modelo (siempre trae lo que hay en stock) */}
-        <div>
-          <label className={label}>Prenda</label>
-          <select
-            value={modelo}
-            onChange={(e) => elegirModelo(e.target.value)}
-            className={input}
-          >
-            <option value="">— Elegí la prenda —</option>
-            {modelos.map((m) => (
-              <option key={m.nombre} value={m.nombre}>
-                {m.nombre} — {m.stock} en stock
-              </option>
-            ))}
-            <option value="__mano__">Otra (escribir a mano)</option>
-          </select>
-        </div>
+        {/* Prenda: en edición es de solo lectura (ya descontó stock) */}
+        {editando && orden ? (
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+            <p className="mb-2 text-xs uppercase tracking-wide text-neutral-400">
+              Prenda (no editable)
+            </p>
+            <div className="grid grid-cols-2 gap-3 text-sm text-neutral-700 sm:grid-cols-4">
+              <span>{orden.product_nombre || orden.prenda || "—"}</span>
+              <span>{orden.tipo_prenda || "—"}</span>
+              <span>Talle: {orden.talle || "—"}</span>
+              <span>Color: {orden.color || "—"}</span>
+              <span>Cantidad: {orden.cantidad}</span>
+            </div>
+            <p className="mt-2 text-xs text-neutral-400">
+              La prenda, el talle, el color y la cantidad no se pueden
+              modificar porque ya se descontó el stock. Si están mal, eliminá
+              la orden y creála de nuevo.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* 1) Modelo (siempre trae lo que hay en stock) */}
+            <div>
+              <label className={label}>Prenda</label>
+              <select
+                value={modelo}
+                onChange={(e) => elegirModelo(e.target.value)}
+                className={input}
+              >
+                <option value="">— Elegí la prenda —</option>
+                {modelos.map((m) => (
+                  <option key={m.nombre} value={m.nombre}>
+                    {m.nombre} — {m.stock} en stock
+                  </option>
+                ))}
+                <option value="__mano__">Otra (escribir a mano)</option>
+              </select>
+            </div>
+          </>
+        )}
 
         {/* 2) A mano */}
-        {esManual && (
+        {!editando && esManual && (
           <div className="space-y-6">
             <div>
               <label className={label}>Nombre de la prenda</label>
@@ -347,7 +407,7 @@ export default function OrdenProduccionForm({
         )}
 
         {/* 2) Con producto: color → talle (solo con stock) */}
-        {modelo && !esManual && (
+        {!editando && modelo && !esManual && (
           <div className="grid gap-6 sm:grid-cols-4">
             <div>
               <label className={label}>Color</label>
@@ -641,7 +701,7 @@ export default function OrdenProduccionForm({
 
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Link
-          href="/admin/produccion"
+          href={editando ? `/admin/produccion/${orden!.id}` : "/admin/produccion"}
           className="rounded-xl border border-neutral-300 px-6 py-3 font-medium text-neutral-700 transition hover:bg-neutral-100"
         >
           Cancelar
@@ -651,7 +711,11 @@ export default function OrdenProduccionForm({
           disabled={guardando}
           className="rounded-xl bg-neutral-900 px-8 py-3 text-base font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
         >
-          {guardando ? "Guardando…" : "Crear orden de producción"}
+          {guardando
+            ? "Guardando…"
+            : editando
+              ? "Guardar cambios"
+              : "Crear orden de producción"}
         </button>
       </div>
     </form>
