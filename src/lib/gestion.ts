@@ -131,16 +131,19 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
 
 /** Ventas (online aprobadas + manuales) para el análisis del tablero. */
 export async function getVentasParaAnalitica(): Promise<
-  { fecha: string; total: number; cliente: string }[]
+  { fecha: string; total: number; cliente: string; canal: "online" | "manual" }[]
 > {
   const supabase = await createClient();
-  const [{ data: orders }, { data: manuales }] = await Promise.all([
-    supabase
-      .from("orders")
-      .select("created_at, total, comprador")
-      .eq("status", "approved"),
-    supabase.from("ventas").select("fecha, total, cliente"),
-  ]);
+  const [{ data: orders, error: errOrders }, { data: manuales, error: errVentas }] =
+    await Promise.all([
+      supabase
+        .from("orders")
+        .select("created_at, total, comprador")
+        .eq("status", "approved"),
+      supabase.from("ventas").select("fecha, total, cliente"),
+    ]);
+  if (errOrders) console.warn("getVentasParaAnalitica (orders):", errOrders.message);
+  if (errVentas) console.warn("getVentasParaAnalitica (ventas):", errVentas.message);
 
   const online = (
     (orders as {
@@ -152,6 +155,7 @@ export async function getVentasParaAnalitica(): Promise<
     fecha: o.created_at,
     total: Number(o.total),
     cliente: o.comprador?.email || o.comprador?.nombre || "Cliente web",
+    canal: "online" as const,
   }));
 
   const man = (
@@ -160,6 +164,7 @@ export async function getVentasParaAnalitica(): Promise<
     fecha: v.fecha,
     total: Number(v.total),
     cliente: v.cliente || "",
+    canal: "manual" as const,
   }));
 
   return [...online, ...man];

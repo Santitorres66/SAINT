@@ -3,8 +3,17 @@
 import { useMemo, useState } from "react";
 import { formatPrecio } from "@/lib/constants";
 
-type Venta = { fecha: string; total: number; cliente: string };
+type Venta = {
+  fecha: string;
+  total: number;
+  cliente: string;
+  canal: "online" | "manual";
+};
 type Preset = "mes" | "anio" | "12m" | "todo" | "custom";
+
+// Colores por canal (validados para distinguirse incluso con daltonismo).
+const COLOR_ONLINE = "#2a78d6"; // Tienda web
+const COLOR_MANUAL = "#eb6834"; // Manual
 
 const MESES = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -57,6 +66,37 @@ export default function AnaliticaVentas({ ventas }: { ventas: Venta[] }) {
       promedio: cant ? facturado / cant : 0,
       clientes,
     };
+  }, [ventas, ini, fin]);
+
+  // Desglose por canal del período (para el gráfico de torta)
+  const porCanal = useMemo(() => {
+    const enRango = ventas.filter((v) => {
+      const d = new Date(v.fecha);
+      return d >= ini && d <= fin;
+    });
+    const online = enRango.filter((v) => v.canal === "online");
+    const manual = enRango.filter((v) => v.canal === "manual");
+    const totalOnline = online.reduce((a, v) => a + v.total, 0);
+    const totalManual = manual.reduce((a, v) => a + v.total, 0);
+    const total = totalOnline + totalManual;
+    return [
+      {
+        canal: "online" as const,
+        label: "Tienda web",
+        color: COLOR_ONLINE,
+        total: totalOnline,
+        cant: online.length,
+        pct: total ? (totalOnline / total) * 100 : 0,
+      },
+      {
+        canal: "manual" as const,
+        label: "Manual",
+        color: COLOR_MANUAL,
+        total: totalManual,
+        cant: manual.length,
+        pct: total ? (totalManual / total) * 100 : 0,
+      },
+    ];
   }, [ventas, ini, fin]);
 
   // Gráfico: facturado por mes (últimos 12 meses)
@@ -152,7 +192,7 @@ export default function AnaliticaVentas({ ventas }: { ventas: Venta[] }) {
           <span className="text-xs text-neutral-400">últimos 12 meses</span>
         </div>
 
-        <div className="flex h-48 items-end gap-1.5 border-b border-neutral-200">
+        <div className="flex h-48 items-stretch gap-1.5 border-b border-neutral-200">
           {meses.map((m, i) => {
             const h = (m.total / maxMes) * 100;
             return (
@@ -186,6 +226,108 @@ export default function AnaliticaVentas({ ventas }: { ventas: Venta[] }) {
         <p className="mt-3 text-right text-xs text-neutral-400">
           Máximo del período: {compacto(maxMes)}
         </p>
+      </div>
+
+      {/* Gráfico de torta: ventas por canal, mismo período que los KPIs */}
+      <div className="rounded-2xl border border-neutral-200 bg-white p-6">
+        <div className="mb-6 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold text-neutral-900">
+            Ventas por canal
+          </h2>
+          <span className="text-xs text-neutral-400">período seleccionado</span>
+        </div>
+
+        {kpi.facturado === 0 ? (
+          <p className="py-8 text-center text-sm text-neutral-400">
+            No hay ventas en este período.
+          </p>
+        ) : (
+          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center">
+            <DonutCanal datos={porCanal} />
+            <ul className="space-y-3">
+              {porCanal.map((c) => (
+                <li key={c.canal} className="flex items-center gap-3">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: c.color }}
+                    aria-hidden
+                  />
+                  <div className="text-sm">
+                    <p className="font-medium text-neutral-800">
+                      {c.label}{" "}
+                      <span className="text-neutral-400">
+                        · {c.pct.toFixed(0)}%
+                      </span>
+                    </p>
+                    <p className="text-neutral-500">
+                      {formatPrecio(c.total)} · {c.cant}{" "}
+                      {c.cant === 1 ? "venta" : "ventas"}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Gráfico de torta (donut) de 2 segmentos: ventas online vs. manuales. */
+function DonutCanal({
+  datos,
+}: {
+  datos: { canal: string; color: string; total: number; pct: number }[];
+}) {
+  const r = 60;
+  const sw = 26;
+  const C = 2 * Math.PI * r;
+  const GAP = datos.filter((d) => d.pct > 0).length > 1 ? 3 : 0;
+
+  let acumulado = 0;
+  const segmentos = datos
+    .filter((d) => d.pct > 0)
+    .map((d) => {
+      const largo = (d.pct / 100) * C;
+      const dash = Math.max(largo - GAP, 0);
+      const offset = -acumulado;
+      acumulado += largo;
+      return { ...d, dash, offset };
+    });
+
+  const total = datos.reduce((a, d) => a + d.total, 0);
+
+  return (
+    <div className="relative h-40 w-40 shrink-0">
+      <svg viewBox="0 0 140 140" className="h-40 w-40 -rotate-90">
+        <circle
+          cx={70}
+          cy={70}
+          r={r}
+          fill="none"
+          stroke="#e1e0d9"
+          strokeWidth={sw}
+        />
+        {segmentos.map((s) => (
+          <circle
+            key={s.canal}
+            cx={70}
+            cy={70}
+            r={r}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={sw}
+            strokeDasharray={`${s.dash} ${C - s.dash}`}
+            strokeDashoffset={s.offset}
+          />
+        ))}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[10px] text-neutral-400">Total</span>
+        <span className="text-sm font-semibold text-neutral-900">
+          {formatPrecio(total)}
+        </span>
       </div>
     </div>
   );
