@@ -2,12 +2,21 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { Product, Proveedor, CompraItem } from "@/lib/types";
+import type { Product, Proveedor, CompraItem, TipoItemCompra } from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
 import { createCompra } from "@/app/admin/gestion-actions";
+import MedioPagoCuotas from "./MedioPagoCuotas";
+
+const TIPOS_ITEM: { value: TipoItemCompra; label: string }[] = [
+  { value: "mercaderia", label: "Mercadería (para vender)" },
+  { value: "insumo", label: "Insumo (hilos, telas…)" },
+  { value: "activo_fijo", label: "Activo fijo (maquinaria)" },
+];
 
 type Linea = {
+  tipo: TipoItemCompra;
   product_id: string;
+  descripcion: string; // solo para insumo / activo_fijo
   talle: string;
   color: string;
   cantidad: string;
@@ -29,9 +38,18 @@ export default function CompraForm({
   const [proveedorId, setProveedorId] = useState("");
   const [fecha, setFecha] = useState(hoy);
   const [notas, setNotas] = useState("");
-  const [lineas, setLineas] = useState<Linea[]>([
-    { product_id: "", talle: "", color: "", cantidad: "1", costo_unitario: "" },
-  ]);
+  const [medioPago, setMedioPago] = useState("");
+  const [cuotas, setCuotas] = useState("1");
+  const lineaVacia: Linea = {
+    tipo: "mercaderia",
+    product_id: "",
+    descripcion: "",
+    talle: "",
+    color: "",
+    cantidad: "1",
+    costo_unitario: "",
+  };
+  const [lineas, setLineas] = useState<Linea[]>([{ ...lineaVacia }]);
 
   function actualizar(i: number, campo: keyof Linea, valor: string) {
     setLineas((prev) =>
@@ -46,16 +64,20 @@ export default function CompraForm({
           nueva.talle = prod && prod.talles.length === 1 ? prod.talles[0] : "";
           nueva.color = prod && prod.colores.length === 1 ? prod.colores[0] : "";
         }
+        // Al cambiar de tipo, limpiamos lo que no aplica al nuevo tipo
+        if (campo === "tipo") {
+          nueva.product_id = "";
+          nueva.descripcion = "";
+          nueva.talle = "";
+          nueva.color = "";
+        }
         return nueva;
       }),
     );
   }
 
   function agregarLinea() {
-    setLineas((prev) => [
-      ...prev,
-      { product_id: "", talle: "", color: "", cantidad: "1", costo_unitario: "" },
-    ]);
+    setLineas((prev) => [...prev, { ...lineaVacia }]);
   }
   function quitarLinea(i: number) {
     setLineas((prev) => prev.filter((_, idx) => idx !== i));
@@ -71,29 +93,50 @@ export default function CompraForm({
     setError(null);
 
     const items: CompraItem[] = lineas
-      .filter((l) => l.product_id && Number(l.cantidad) > 0)
+      .filter((l) =>
+        l.tipo === "mercaderia"
+          ? l.product_id && Number(l.cantidad) > 0
+          : l.descripcion.trim() && Number(l.cantidad) > 0,
+      )
       .map((l) => {
-        const prod = products.find((p) => p.id === l.product_id)!;
+        if (l.tipo === "mercaderia") {
+          const prod = products.find((p) => p.id === l.product_id)!;
+          return {
+            tipo: l.tipo,
+            product_id: l.product_id,
+            nombre: prod.nombre,
+            talle: l.talle || null,
+            color: l.color || null,
+            cantidad: Number(l.cantidad),
+            costo_unitario: Number(l.costo_unitario) || 0,
+          };
+        }
         return {
-          product_id: l.product_id,
-          nombre: prod.nombre,
-          talle: l.talle || null,
-          color: l.color || null,
+          tipo: l.tipo,
+          product_id: null,
+          nombre: l.descripcion.trim(),
+          talle: null,
+          color: null,
           cantidad: Number(l.cantidad),
           costo_unitario: Number(l.costo_unitario) || 0,
         };
       });
 
     if (!items.length) {
-      setError("Agregá al menos un producto con cantidad.");
+      setError("Agregá al menos un ítem con cantidad.");
       return;
     }
+
+    const nCuotas = Number(cuotas) || 1;
 
     startTransition(async () => {
       const res = await createCompra({
         proveedor_id: proveedorId || null,
         fecha,
         items,
+        medio_pago: medioPago,
+        cuotas: nCuotas,
+        monto_cuota: nCuotas > 0 ? total / nCuotas : 0,
         notas,
       });
       if (res?.error) setError(res.error);
@@ -154,45 +197,78 @@ export default function CompraForm({
         </div>
       </section>
 
-      {/* Productos comprados */}
+      {/* Ítems de la compra */}
       <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6">
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">
-            Productos comprados
+            Ítems de la compra
           </h2>
           <p className="text-sm text-neutral-500">
-            Elegí el producto, la cantidad y cuánto te costó cada uno. Se suma al
-            stock automáticamente.
+            Elegí un producto del catálogo (suma stock) o describí un insumo
+            (hilos, telas) o activo fijo (maquinaria) que no se revende.
           </p>
         </div>
 
         <div className="space-y-3">
           {lineas.map((l, i) => {
             const prod = products.find((p) => p.id === l.product_id);
+            const esMercaderia = l.tipo === "mercaderia";
             return (
               <div key={i} className="space-y-3 rounded-xl bg-neutral-50 p-3">
+                <div className="w-full sm:w-64">
+                  <label className="mb-1 block text-xs text-neutral-500">
+                    Tipo
+                  </label>
+                  <select
+                    value={l.tipo}
+                    onChange={(e) => actualizar(i, "tipo", e.target.value)}
+                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                  >
+                    {TIPOS_ITEM.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_100px_140px_40px] sm:items-end">
                   <div>
                     <label className="mb-1 block text-xs text-neutral-500">
-                      Producto
+                      {esMercaderia ? "Producto" : "Descripción"}
                     </label>
-                    <select
-                      value={l.product_id}
-                      onChange={(e) =>
-                        actualizar(i, "product_id", e.target.value)
-                      }
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">— Elegir —</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nombre}
-                          {p.colores.length > 0
-                            ? ` · ${p.colores.join("/")}`
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
+                    {esMercaderia ? (
+                      <select
+                        value={l.product_id}
+                        onChange={(e) =>
+                          actualizar(i, "product_id", e.target.value)
+                        }
+                        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      >
+                        <option value="">— Elegir —</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}
+                            {p.colores.length > 0
+                              ? ` · ${p.colores.join("/")}`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={l.descripcion}
+                        onChange={(e) =>
+                          actualizar(i, "descripcion", e.target.value)
+                        }
+                        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                        placeholder={
+                          l.tipo === "insumo"
+                            ? "Ej: Hilo poliéster negro Nm40"
+                            : "Ej: Máquina de coser recta"
+                        }
+                      />
+                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-neutral-500">
@@ -232,7 +308,7 @@ export default function CompraForm({
                 </div>
 
                 {/* Talle / color de la variante (si el producto los tiene) */}
-                {prod && (prod.talles.length > 0 || prod.colores.length > 0) && (
+                {esMercaderia && prod && (prod.talles.length > 0 || prod.colores.length > 0) && (
                   <div className="grid grid-cols-2 gap-3">
                     {prod.talles.length > 0 && (
                       <select
@@ -274,7 +350,7 @@ export default function CompraForm({
           onClick={agregarLinea}
           className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
         >
-          + Agregar otro producto
+          + Agregar otro ítem
         </button>
 
         <div className="flex items-center justify-between border-t border-neutral-100 pt-4">
@@ -283,6 +359,18 @@ export default function CompraForm({
             {formatPrecio(total)}
           </span>
         </div>
+      </section>
+
+      {/* Forma de pago */}
+      <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6">
+        <h2 className="text-lg font-semibold text-neutral-900">Forma de pago</h2>
+        <MedioPagoCuotas
+          medioPago={medioPago}
+          onMedioPagoChange={setMedioPago}
+          cuotas={cuotas}
+          onCuotasChange={setCuotas}
+          total={total}
+        />
       </section>
 
       {/* Notas */}

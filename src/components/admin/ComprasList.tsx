@@ -12,6 +12,11 @@ function formatFecha(iso: string) {
   );
 }
 
+const LABEL_TIPO: Record<string, string> = {
+  insumo: "Insumo",
+  activo_fijo: "Activo fijo",
+};
+
 /** Listado de compras con opción de eliminar (revierte el stock). */
 export default function ComprasList({ compras }: { compras: Compra[] }) {
   const router = useRouter();
@@ -73,6 +78,12 @@ export default function ComprasList({ compras }: { compras: Compra[] }) {
                 <p className="text-lg font-semibold text-neutral-900">
                   {formatPrecio(c.total)}
                 </p>
+                {c.medio_pago && c.cuotas > 1 && (
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    {c.medio_pago} · {c.cuotas} cuotas de{" "}
+                    {formatPrecio(c.monto_cuota)}
+                  </p>
+                )}
                 <button
                   onClick={() => setABorrar(c)}
                   className="mt-1 text-xs font-medium text-red-600 hover:underline"
@@ -83,14 +94,22 @@ export default function ComprasList({ compras }: { compras: Compra[] }) {
             </div>
 
             <ul className="mt-3 divide-y divide-neutral-100 border-t border-neutral-100 pt-2 text-sm text-neutral-600">
-              {c.items.map((it, idx) => (
-                <li key={idx} className="flex justify-between py-1.5">
-                  <span>
-                    {it.cantidad}× {it.nombre}
-                  </span>
-                  <span>{formatPrecio(it.costo_unitario * it.cantidad)}</span>
-                </li>
-              ))}
+              {c.items.map((it, idx) => {
+                const tipo = it.tipo ?? "mercaderia";
+                return (
+                  <li key={idx} className="flex justify-between py-1.5">
+                    <span>
+                      {it.cantidad}× {it.nombre}
+                      {LABEL_TIPO[tipo] && (
+                        <span className="ml-2 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">
+                          {LABEL_TIPO[tipo]}
+                        </span>
+                      )}
+                    </span>
+                    <span>{formatPrecio(it.costo_unitario * it.cantidad)}</span>
+                  </li>
+                );
+              })}
             </ul>
 
             {c.notas && (

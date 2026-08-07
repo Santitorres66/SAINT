@@ -120,9 +120,14 @@ export interface Proveedor {
 }
 export type ProveedorInput = Omit<Proveedor, "id" | "created_at">;
 
+/** Tipo de un ítem de compra: solo "mercaderia" suma stock y cuesta el producto. */
+export type TipoItemCompra = "mercaderia" | "insumo" | "activo_fijo";
+
 /** Ítem de una compra a proveedor. */
 export interface CompraItem {
-  product_id: string;
+  tipo: TipoItemCompra;
+  /** Solo para "mercaderia": producto del catálogo que suma stock. */
+  product_id: string | null;
   nombre: string;
   talle: string | null;
   color: string | null;
@@ -130,7 +135,7 @@ export interface CompraItem {
   costo_unitario: number;
 }
 
-/** Una compra a un proveedor (suma stock). */
+/** Una compra a un proveedor (la mercadería suma stock; insumos/activos no). */
 export interface Compra {
   id: string;
   created_at: string;
@@ -138,6 +143,9 @@ export interface Compra {
   proveedor_id: string | null;
   total: number;
   items: CompraItem[];
+  medio_pago: string;
+  cuotas: number;
+  monto_cuota: number;
   notas: string;
   /** Nombre del proveedor (se completa al leer con join). */
   proveedor_nombre?: string | null;

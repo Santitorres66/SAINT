@@ -98,10 +98,13 @@ export async function createCompra(input: {
   proveedor_id: string | null;
   fecha: string;
   items: CompraItem[];
+  medio_pago: string;
+  cuotas: number;
+  monto_cuota: number;
   notas: string;
 }): Promise<ActionResult> {
   if (!input.items?.length)
-    return { error: "Agregá al menos un producto a la compra." };
+    return { error: "Agregá al menos un ítem a la compra." };
 
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
@@ -118,6 +121,9 @@ export async function createCompra(input: {
       fecha: input.fecha || new Date().toISOString(),
       total,
       items: input.items,
+      medio_pago: input.medio_pago?.trim() ?? "",
+      cuotas: input.cuotas || 1,
+      monto_cuota: input.monto_cuota || 0,
       notas: input.notas?.trim() ?? "",
     })
     .select("id")
@@ -126,9 +132,9 @@ export async function createCompra(input: {
   if (error || !compra)
     return { error: `No se pudo guardar la compra: ${error?.message}` };
 
-  // Sumar stock a la variante y actualizar el costo del producto
+  // Sumar stock y actualizar costo SOLO para ítems de mercadería
   for (const it of input.items) {
-    if (!it.product_id) continue;
+    if ((it.tipo ?? "mercaderia") !== "mercaderia" || !it.product_id) continue;
     await supabase.rpc("sumar_stock_variante", {
       p_product_id: it.product_id,
       p_talle: it.talle ?? "",
@@ -158,14 +164,13 @@ export async function deleteCompra(id: string): Promise<ActionResult> {
 
   if (compra?.items) {
     for (const it of compra.items as CompraItem[]) {
-      if (it.product_id) {
-        await supabase.rpc("descontar_stock_variante", {
-          p_product_id: it.product_id,
-          p_talle: it.talle ?? "",
-          p_color: it.color ?? "",
-          p_cantidad: it.cantidad,
-        });
-      }
+      if ((it.tipo ?? "mercaderia") !== "mercaderia" || !it.product_id) continue;
+      await supabase.rpc("descontar_stock_variante", {
+        p_product_id: it.product_id,
+        p_talle: it.talle ?? "",
+        p_color: it.color ?? "",
+        p_cantidad: it.cantidad,
+      });
     }
   }
 
