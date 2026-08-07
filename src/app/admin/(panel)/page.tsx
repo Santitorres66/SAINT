@@ -74,25 +74,38 @@ export default async function TableroPage() {
           </p>
         ) : (
           <ul className="mt-4 divide-y divide-neutral-100">
-            {stats.stockBajo.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-3">
-                <Link
-                  href={`/admin/editar/${p.id}`}
-                  className="font-medium text-neutral-800 hover:underline"
+            {stats.stockBajo.map((p) => {
+              const detalle = [p.color, p.talle && `Talle ${p.talle}`]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <li
+                  key={`${p.id}-${p.talle}-${p.color}`}
+                  className="flex items-center justify-between py-3"
                 >
-                  {p.nombre}
-                </Link>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    p.stock === 0
-                      ? "bg-red-100 text-red-700"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {p.stock === 0 ? "Sin stock" : `${p.stock} u.`}
-                </span>
-              </li>
-            ))}
+                  <div>
+                    <Link
+                      href={`/admin/editar/${p.id}`}
+                      className="font-medium text-neutral-800 hover:underline"
+                    >
+                      {p.nombre}
+                    </Link>
+                    {detalle && (
+                      <p className="text-xs text-neutral-400">{detalle}</p>
+                    )}
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      p.stock === 0
+                        ? "bg-red-100 text-red-700"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {p.stock === 0 ? "Sin stock" : `${p.stock} u.`}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

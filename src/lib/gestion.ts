@@ -184,6 +184,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     { data: ventasMes },
     { data: comprasMes },
     { data: productos },
+    { data: variantesBajas },
   ] = await Promise.all([
     supabase
       .from("orders")
@@ -193,6 +194,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     supabase.from("ventas").select("total, items").gte("fecha", inicioMes),
     supabase.from("compras").select("total").gte("fecha", inicioMes),
     supabase.from("products").select("id, nombre, costo, precio, stock, activo"),
+    supabase
+      .from("product_variantes")
+      .select("product_id, talle, color, stock, products(nombre, activo)")
+      .lte("stock", 3),
   ]);
 
   const prods =
@@ -230,11 +235,25 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     0,
   );
 
-  const stockBajo = prods
-    .filter((p) => p.activo && p.stock <= 3)
+  const stockBajo = (
+    (variantesBajas as unknown as {
+      product_id: string;
+      talle: string;
+      color: string;
+      stock: number;
+      products: { nombre: string; activo: boolean } | null;
+    }[]) ?? []
+  )
+    .filter((v) => v.products?.activo)
     .sort((a, b) => a.stock - b.stock)
     .slice(0, 10)
-    .map((p) => ({ id: p.id, nombre: p.nombre, stock: p.stock }));
+    .map((v) => ({
+      id: v.product_id,
+      nombre: v.products?.nombre ?? "",
+      talle: v.talle,
+      color: v.color,
+      stock: v.stock,
+    }));
 
   const stockValorizadoCosto = prods.reduce(
     (a, p) => a + p.stock * (Number(p.costo) || 0),

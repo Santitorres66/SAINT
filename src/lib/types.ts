@@ -282,7 +282,13 @@ export interface DashboardStats {
   comprasMesTotal: number;
   gananciaMesEstimada: number;
   productosActivos: number;
-  stockBajo: { id: string; nombre: string; stock: number }[];
+  stockBajo: {
+    id: string;
+    nombre: string;
+    talle: string;
+    color: string;
+    stock: number;
+  }[];
   /** Capital en mercadería: stock × costo. */
   stockValorizadoCosto: number;
   /** Valor del stock a precio de venta. */
