@@ -54,10 +54,10 @@ function Tarjeta({
       <div {...listeners} {...attributes} className="cursor-grab active:cursor-grabbing">
         <div className="flex gap-3">
           <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
-            {orden.imagen_ref_url ? (
+            {orden.product_imagen_url || orden.imagen_ref_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={orden.imagen_ref_url}
+                src={orden.product_imagen_url ?? orden.imagen_ref_url ?? ""}
                 alt=""
                 className="h-full w-full object-cover"
               />

@@ -86,7 +86,7 @@ export async function getMatricesSimple(): Promise<Matriz[]> {
 /* ------------------------- Órdenes de producción ------------------------- */
 
 type OrdenRow = OrdenProduccion & {
-  products: { nombre: string } | null;
+  products: { nombre: string; imagenes: string[] } | null;
   matrices: { nombre: string } | null;
 };
 
@@ -94,7 +94,7 @@ export async function getOrdenesProduccion(): Promise<OrdenProduccionVista[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ordenes_produccion")
-    .select("*, products(nombre), matrices(nombre)")
+    .select("*, products(nombre, imagenes), matrices(nombre)")
     .order("posicion", { ascending: true })
     .order("created_at", { ascending: false });
 
@@ -112,6 +112,7 @@ export async function getOrdenesProduccion(): Promise<OrdenProduccionVista[]> {
       ? urls.get(o.imagen_ref_path) ?? null
       : null,
     product_nombre: o.products?.nombre ?? null,
+    product_imagen_url: o.products?.imagenes?.[0] ?? null,
     matriz_nombre: o.matrices?.nombre ?? null,
   }));
 }
@@ -122,7 +123,7 @@ export async function getOrdenProduccionById(
   const supabase = await createClient();
   const { data } = await supabase
     .from("ordenes_produccion")
-    .select("*, products(nombre), matrices(nombre)")
+    .select("*, products(nombre, imagenes), matrices(nombre)")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -131,6 +132,7 @@ export async function getOrdenProduccionById(
     ...o,
     imagen_ref_url: await firmarUrl(o.imagen_ref_path),
     product_nombre: o.products?.nombre ?? null,
+    product_imagen_url: o.products?.imagenes?.[0] ?? null,
     matriz_nombre: o.matrices?.nombre ?? null,
   };
 }
@@ -140,7 +142,7 @@ export async function getOrdenDetalle(id: string): Promise<OrdenDetalle | null> 
   const supabase = await createClient();
   const { data } = await supabase
     .from("ordenes_produccion")
-    .select("*, products(nombre), matrices(nombre, costo, imagen_path, archivo_path)")
+    .select("*, products(nombre, imagenes), matrices(nombre, costo, imagen_path, archivo_path)")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -174,6 +176,7 @@ export async function getOrdenDetalle(id: string): Promise<OrdenDetalle | null> 
       ...o,
       imagen_ref_url: o.imagen_ref_path ? urls.get(o.imagen_ref_path) ?? null : null,
       product_nombre: o.products?.nombre ?? null,
+      product_imagen_url: o.products?.imagenes?.[0] ?? null,
       matriz_nombre: o.matrices?.nombre ?? null,
     },
     imagen_ref_url: o.imagen_ref_path ? urls.get(o.imagen_ref_path) ?? null : null,

@@ -248,6 +248,7 @@ export interface OrdenProduccion {
 export interface OrdenProduccionVista extends OrdenProduccion {
   imagen_ref_url: string | null; // URL firmada temporal
   product_nombre: string | null;
+  product_imagen_url: string | null; // foto del producto (catálogo), pública
   matriz_nombre: string | null;
 }
 
