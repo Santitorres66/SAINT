@@ -8,9 +8,14 @@ import type {
   Cliente,
   ProductVariante,
   OrdenProduccionVista,
+  PrioridadProduccion,
 } from "@/lib/types";
 import { nombreCompleto } from "@/lib/types";
-import { formatPrecio, labelCategoria } from "@/lib/constants";
+import {
+  formatPrecio,
+  labelCategoria,
+  PRIORIDADES_PRODUCCION,
+} from "@/lib/constants";
 import {
   createOrdenProduccion,
   updateOrdenProduccion,
@@ -50,6 +55,12 @@ export default function OrdenProduccionForm({
     if (c) setCliente(nombreCompleto(c));
   }
   const [fecha, setFecha] = useState(orden?.fecha?.slice(0, 10) ?? hoy);
+  const [prioridad, setPrioridad] = useState<PrioridadProduccion>(
+    orden?.prioridad ?? "media",
+  );
+  const [fechaEntrega, setFechaEntrega] = useState(
+    orden?.fecha_estimada_entrega?.slice(0, 10) ?? "",
+  );
   const [modelo, setModelo] = useState(""); // nombre del producto (o "__mano__")
   const [productId, setProductId] = useState("");
   const [prenda, setPrenda] = useState("");
@@ -226,6 +237,8 @@ export default function OrdenProduccionForm({
               archivo_path: mArchivo,
             }
           : null,
+      prioridad,
+      fecha_estimada_entrega: fechaEntrega || null,
       costo_prenda: Number(costoPrenda) || 0,
       costo_matriz: Number(costoMatriz) || 0,
       costo_bordado: Number(costoBordado) || 0,
@@ -308,6 +321,38 @@ export default function OrdenProduccionForm({
               onChange={(e) => setFecha(e.target.value)}
               className={input}
             />
+          </div>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-3">
+          <div>
+            <label className={label}>Prioridad</label>
+            <select
+              value={prioridad}
+              onChange={(e) =>
+                setPrioridad(e.target.value as PrioridadProduccion)
+              }
+              className={input}
+            >
+              {PRIORIDADES_PRODUCCION.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={label}>Fecha estimada de entrega</label>
+            <input
+              type="date"
+              value={fechaEntrega}
+              onChange={(e) => setFechaEntrega(e.target.value)}
+              className={input}
+            />
+            <p className="mt-1 text-xs text-neutral-400">
+              Opcional. Si se pasa la fecha y el pedido no se entregó, se
+              marca como atrasado.
+            </p>
           </div>
         </div>
 

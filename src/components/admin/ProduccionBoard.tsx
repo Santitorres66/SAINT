@@ -13,7 +13,12 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import type { OrdenProduccionVista, EstadoProduccion } from "@/lib/types";
-import { ESTADOS_PRODUCCION, formatNumeroOrden } from "@/lib/constants";
+import {
+  ESTADOS_PRODUCCION,
+  PRIORIDADES_PRODUCCION,
+  estaAtrasada,
+  formatNumeroOrden,
+} from "@/lib/constants";
 import { cambiarEstadoProduccion } from "@/app/admin/produccion-actions";
 
 function formatFecha(iso: string) {
@@ -42,13 +47,18 @@ function Tarjeta({
       }
     : undefined;
 
+  const atrasada = estaAtrasada(orden.fecha_estimada_entrega, orden.estado);
+  const prio = PRIORIDADES_PRODUCCION.find((p) => p.value === orden.prioridad);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-xl border border-neutral-200 bg-white p-3 shadow-sm ${
-        isDragging ? "opacity-80 shadow-lg" : ""
-      }`}
+      className={`rounded-xl border p-3 shadow-sm ${
+        atrasada
+          ? "border-red-300 bg-red-50 ring-1 ring-red-200"
+          : "border-neutral-200 bg-white"
+      } ${isDragging ? "opacity-80 shadow-lg" : ""}`}
     >
       {/* Zona agarrable para arrastrar */}
       <div {...listeners} {...attributes} className="cursor-grab active:cursor-grabbing">
@@ -68,9 +78,18 @@ function Tarjeta({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-xs text-neutral-400">
-              {formatNumeroOrden(orden.numero)}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-mono text-xs text-neutral-400">
+                {formatNumeroOrden(orden.numero)}
+              </p>
+              {prio && prio.value !== "media" && (
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${prio.chip}`}
+                >
+                  {prio.label}
+                </span>
+              )}
+            </div>
             <p className="truncate text-sm font-medium text-neutral-900">
               {orden.product_nombre || orden.prenda || "—"}
             </p>
@@ -89,6 +108,16 @@ function Tarjeta({
         {orden.cliente && (
           <p className="mt-1 truncate text-xs text-neutral-500">
             👤 {orden.cliente}
+          </p>
+        )}
+        {orden.fecha_estimada_entrega && (
+          <p
+            className={`mt-1 text-xs font-medium ${
+              atrasada ? "text-red-600" : "text-neutral-500"
+            }`}
+          >
+            {atrasada ? "⚠ Atrasado — entrega" : "Entrega"}:{" "}
+            {formatFecha(orden.fecha_estimada_entrega)}
           </p>
         )}
       </div>

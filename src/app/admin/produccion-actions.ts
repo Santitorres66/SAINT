@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BUCKET_PRODUCCION } from "@/lib/produccion";
-import type { MatrizInput, ActionResult } from "@/lib/types";
+import type { MatrizInput, ActionResult, PrioridadProduccion } from "@/lib/types";
 
 function revalidarProduccion() {
   revalidatePath("/admin/produccion");
@@ -43,6 +43,8 @@ type NuevaOrdenInput = {
     imagen_path: string | null;
     archivo_path: string | null;
   } | null;
+  prioridad: PrioridadProduccion;
+  fecha_estimada_entrega: string | null;
   costo_prenda: number;
   costo_matriz: number;
   costo_bordado: number;
@@ -178,6 +180,8 @@ export async function createOrdenProduccion(
       archivo_bordado_path: input.archivo_bordado_path,
       matriz_id: matrizId,
       estado: "pendiente",
+      prioridad: input.prioridad || "media",
+      fecha_estimada_entrega: input.fecha_estimada_entrega,
       costo_prenda: input.costo_prenda || 0,
       costo_matriz: input.costo_matriz || 0,
       costo_bordado: input.costo_bordado || 0,
@@ -233,6 +237,8 @@ type EditarOrdenInput = {
     imagen_path: string | null;
     archivo_path: string | null;
   } | null;
+  prioridad: PrioridadProduccion;
+  fecha_estimada_entrega: string | null;
   costo_prenda: number;
   costo_matriz: number;
   costo_bordado: number;
@@ -292,6 +298,8 @@ export async function updateOrdenProduccion(
       imagen_ref_path: input.imagen_ref_path,
       archivo_bordado_path: input.archivo_bordado_path,
       matriz_id: matrizId,
+      prioridad: input.prioridad || "media",
+      fecha_estimada_entrega: input.fecha_estimada_entrega,
       costo_prenda: input.costo_prenda || 0,
       costo_matriz: input.costo_matriz || 0,
       costo_bordado: input.costo_bordado || 0,

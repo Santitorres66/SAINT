@@ -184,6 +184,8 @@ export type EstadoProduccion =
   | "fabricado"
   | "entregado";
 
+export type PrioridadProduccion = "alta" | "media" | "baja";
+
 /** Matriz de bordado (reutilizable). */
 export interface Matriz {
   id: string;
@@ -232,6 +234,8 @@ export interface OrdenProduccion {
   archivo_bordado_path: string | null;
   matriz_id: string | null;
   estado: EstadoProduccion;
+  prioridad: PrioridadProduccion;
+  fecha_estimada_entrega: string | null;
   fecha_inicio: string | null;
   fecha_fabricacion: string | null;
   costo_prenda: number;

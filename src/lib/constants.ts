@@ -78,6 +78,35 @@ export function labelEstado(value: string): string {
   return ESTADOS_PRODUCCION.find((e) => e.value === value)?.label ?? value;
 }
 
+/** Prioridad de una orden de producción. Sin rojo: ese color queda reservado
+ *  para marcar pedidos atrasados (ver `estaAtrasada` más abajo). */
+export const PRIORIDADES_PRODUCCION = [
+  { value: "alta", label: "Alta", chip: "bg-orange-100 text-orange-800" },
+  { value: "media", label: "Media", chip: "bg-amber-50 text-amber-700" },
+  { value: "baja", label: "Baja", chip: "bg-neutral-100 text-neutral-500" },
+] as const;
+
+export function labelPrioridad(value: string): string {
+  return PRIORIDADES_PRODUCCION.find((p) => p.value === value)?.label ?? value;
+}
+
+/**
+ * Una orden está "atrasada" si tiene fecha estimada de entrega, esa fecha ya
+ * pasó, y todavía no se entregó. Compara por día (no por hora) para no marcar
+ * atrasado el mismo día en que vence.
+ */
+export function estaAtrasada(
+  fechaEstimadaEntrega: string | null,
+  estado: string,
+): boolean {
+  if (!fechaEstimadaEntrega || estado === "entregado") return false;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const limite = new Date(fechaEstimadaEntrega);
+  limite.setHours(0, 0, 0, 0);
+  return limite < hoy;
+}
+
 /** Muestra el número de orden con formato #00025. */
 export function formatNumeroOrden(n: number): string {
   return "#" + String(n).padStart(5, "0");

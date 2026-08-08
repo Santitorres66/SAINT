@@ -5,9 +5,12 @@ import EstadoSelectorDetalle from "@/components/admin/EstadoSelectorDetalle";
 import EliminarOrdenBtn from "@/components/admin/EliminarOrdenBtn";
 import {
   ESTADOS_PRODUCCION,
+  PRIORIDADES_PRODUCCION,
+  estaAtrasada,
   formatNumeroOrden,
   formatPrecio,
   labelEstado,
+  labelPrioridad,
 } from "@/lib/constants";
 import type { EstadoProduccion } from "@/lib/types";
 
@@ -47,6 +50,10 @@ export default async function DetalleOrdenPage({
   const chip =
     ESTADOS_PRODUCCION.find((e) => e.value === orden.estado)?.chip ??
     "bg-neutral-200 text-neutral-700";
+  const prioChip =
+    PRIORIDADES_PRODUCCION.find((p) => p.value === orden.prioridad)?.chip ??
+    "bg-neutral-200 text-neutral-700";
+  const atrasada = estaAtrasada(orden.fecha_estimada_entrega, orden.estado);
 
   return (
     <div>
@@ -65,6 +72,18 @@ export default async function DetalleOrdenPage({
           <span className={`rounded-full px-3 py-1 text-xs font-medium ${chip}`}>
             {labelEstado(orden.estado)}
           </span>
+          {orden.prioridad !== "media" && (
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${prioChip}`}
+            >
+              Prioridad {labelPrioridad(orden.prioridad).toLowerCase()}
+            </span>
+          )}
+          {atrasada && (
+            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+              ⚠ Atrasado
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -199,6 +218,18 @@ export default async function DetalleOrdenPage({
                 />
               </div>
               <dl className="space-y-3">
+                <Dato label="Prioridad" valor={labelPrioridad(orden.prioridad)} />
+                <Dato
+                  label="Entrega estimada"
+                  valor={
+                    orden.fecha_estimada_entrega ? (
+                      <span className={atrasada ? "font-medium text-red-600" : ""}>
+                        {fecha(orden.fecha_estimada_entrega)}
+                        {atrasada ? " · atrasado" : ""}
+                      </span>
+                    ) : null
+                  }
+                />
                 <Dato label="Inicio producción" valor={fecha(orden.fecha_inicio)} />
                 <Dato label="Fabricación" valor={fecha(orden.fecha_fabricacion)} />
               </dl>
