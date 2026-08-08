@@ -104,11 +104,15 @@ export default async function DetalleOrdenPage({
             <h2 className={h2Clase}>Bordado</h2>
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="aspect-square overflow-hidden rounded-xl bg-neutral-100">
-                {imagen_ref_url ? (
+                {imagen_ref_url || orden.product_imagen_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={imagen_ref_url}
-                    alt="Referencia del bordado"
+                    src={imagen_ref_url ?? orden.product_imagen_url ?? ""}
+                    alt={
+                      imagen_ref_url
+                        ? "Referencia del bordado"
+                        : "Foto del producto"
+                    }
                     className="h-full w-full object-cover"
                   />
                 ) : (
