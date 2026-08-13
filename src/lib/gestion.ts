@@ -2,12 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   Proveedor,
   Compra,
+  Cobro,
   VentaManual,
   VentaUnificada,
   DashboardStats,
   Order,
   OrderItem,
 } from "./types";
+import { saldoVenta } from "./types";
 
 /* ------------------------------ Proveedores ------------------------------ */
 
@@ -63,10 +65,18 @@ export async function getVentaManualById(
   const supabase = await createClient();
   const { data } = await supabase
     .from("ventas")
-    .select("*")
+    .select("*, cobros(*)")
     .eq("id", id)
     .maybeSingle();
-  return (data as VentaManual) ?? null;
+  if (!data) return null;
+
+  const v = data as VentaManual & { cobros: Cobro[] | null };
+  return {
+    ...v,
+    cobros: (v.cobros ?? []).sort(
+      (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+    ),
+  };
 }
 
 export async function getVentasManuales(): Promise<VentaManual[]> {
@@ -85,18 +95,37 @@ export async function getVentasManuales(): Promise<VentaManual[]> {
 /**
  * Listado unificado de ventas: online (Mercado Pago, aprobadas) + manuales.
  * Ordenado de la más nueva a la más vieja.
+ *
+ * Las ventas online ya vienen cobradas por Mercado Pago: se muestran siempre
+ * como saldadas, sin saldo pendiente.
  */
 export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
   const supabase = await createClient();
 
-  const [{ data: orders }, { data: manuales }] = await Promise.all([
-    supabase
-      .from("orders")
-      .select("*")
-      .eq("status", "approved")
-      .order("created_at", { ascending: false }),
-    supabase.from("ventas").select("*").order("fecha", { ascending: false }),
-  ]);
+  const [{ data: orders }, { data: manuales }, { data: ordenes }] =
+    await Promise.all([
+      supabase
+        .from("orders")
+        .select("*")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("ventas")
+        .select("*, cobros(*)")
+        .order("fecha", { ascending: false }),
+      // Órdenes de producción ya vendidas → para mostrar de qué orden vino
+      // cada venta. Consulta aparte: el vínculo vive en `ordenes_produccion`.
+      supabase
+        .from("ordenes_produccion")
+        .select("id, numero, venta_id")
+        .not("venta_id", "is", null),
+    ]);
+
+  const ordenPorVenta = new Map(
+    ((ordenes as { id: string; numero: number; venta_id: string }[]) ?? []).map(
+      (o) => [o.venta_id, o],
+    ),
+  );
 
   const online: VentaUnificada[] = ((orders as Order[]) ?? []).map((o) => ({
     id: o.id,
@@ -105,22 +134,44 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
     cliente: o.comprador?.nombre || o.comprador?.email || "Cliente web",
     medio_pago: "Mercado Pago",
     estado: "Pagada",
-    total: o.total,
+    total: Number(o.total),
     items: o.items ?? [],
+    estado_cobro: "cobrado",
+    descuento: 0,
+    total_cobrado: Number(o.total),
+    saldo: 0,
+    fecha_cobro: o.created_at,
+    cobros: [],
+    orden_numero: null,
+    orden_id: null,
   }));
 
-  const manual: VentaUnificada[] = ((manuales as VentaManual[]) ?? []).map(
-    (v) => ({
-      id: v.id,
-      fecha: v.fecha,
-      canal: "manual",
-      cliente: v.cliente || "—",
-      medio_pago: v.medio_pago || "—",
-      estado: "Completada",
-      total: v.total,
-      items: v.items ?? [],
+  type VentaRow = VentaManual & { cobros: Cobro[] | null };
+
+  const manual: VentaUnificada[] = ((manuales as VentaRow[]) ?? []).map((v) => ({
+    id: v.id,
+    fecha: v.fecha,
+    canal: "manual",
+    cliente: v.cliente || "—",
+    medio_pago: v.medio_pago || "—",
+    estado: "Completada",
+    total: Number(v.total),
+    items: v.items ?? [],
+    estado_cobro: v.estado_cobro ?? "pendiente",
+    descuento: Number(v.descuento ?? 0),
+    total_cobrado: Number(v.total_cobrado ?? 0),
+    saldo: saldoVenta({
+      total: Number(v.total),
+      descuento: Number(v.descuento ?? 0),
+      total_cobrado: Number(v.total_cobrado ?? 0),
     }),
-  );
+    fecha_cobro: v.fecha_cobro ?? null,
+    cobros: (v.cobros ?? []).sort(
+      (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
+    ),
+    orden_numero: ordenPorVenta.get(v.id)?.numero ?? null,
+    orden_id: ordenPorVenta.get(v.id)?.id ?? null,
+  }));
 
   return [...online, ...manual].sort(
     (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
@@ -185,19 +236,37 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     { data: comprasMes },
     { data: productos },
     { data: variantesBajas },
+    { data: cobrosMes },
+    { data: ventasPendientes },
+    { data: ordenesVendidas },
   ] = await Promise.all([
     supabase
       .from("orders")
       .select("total, items")
       .eq("status", "approved")
       .gte("created_at", inicioMes),
-    supabase.from("ventas").select("total, items").gte("fecha", inicioMes),
+    supabase
+      .from("ventas")
+      .select("id, total, items")
+      .gte("fecha", inicioMes),
     supabase.from("compras").select("total").gte("fecha", inicioMes),
     supabase.from("products").select("id, nombre, costo, precio, stock, activo"),
     supabase
       .from("product_variantes")
       .select("product_id, talle, color, stock, products(nombre, activo)")
       .lte("stock", 3),
+    // Plata que entró este mes (por fecha del cobro, no de la venta)
+    supabase.from("cobros").select("monto").gte("fecha", inicioMes),
+    // Saldo pendiente de TODAS las ventas, no solo las del mes
+    supabase
+      .from("ventas")
+      .select("total, descuento, total_cobrado")
+      .neq("estado_cobro", "cobrado"),
+    // Costo real de las prendas bordadas, para calcular bien la ganancia
+    supabase
+      .from("ordenes_produccion")
+      .select("venta_id, costo_total")
+      .not("venta_id", "is", null),
   ]);
 
   const prods =
@@ -212,7 +281,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const costoMap = new Map(prods.map((p) => [p.id, Number(p.costo) || 0]));
 
   const ventasOnline = (ordersMes as { total: number; items: OrderItem[] }[]) ?? [];
-  const ventasMan = (ventasMes as { total: number; items: OrderItem[] }[]) ?? [];
+  const ventasMan =
+    (ventasMes as { id: string; total: number; items: OrderItem[] }[]) ?? [];
 
   const ventasMesTotal =
     ventasOnline.reduce((a, v) => a + Number(v.total), 0) +
@@ -223,17 +293,68 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     (comprasMes as { total: number }[]) ?? []
   ).reduce((a, c) => a + Number(c.total), 0);
 
-  // Ganancia estimada = suma de (precio de venta - costo) por cada unidad vendida
-  const todosItems = [...ventasOnline, ...ventasMan].flatMap(
-    (v) => v.items ?? [],
-  );
-  const gananciaMesEstimada = todosItems.reduce(
-    (a, it) =>
-      a +
-      (Number(it.precio_unitario) - (costoMap.get(it.product_id ?? "") ?? 0)) *
-        Number(it.cantidad),
+  /* --- Cobros --- */
+  const cobradoMesTotal = ((cobrosMes as { monto: number }[]) ?? []).reduce(
+    (a, c) => a + Number(c.monto),
     0,
   );
+
+  const pendientes =
+    (ventasPendientes as {
+      total: number;
+      descuento: number;
+      total_cobrado: number;
+    }[]) ?? [];
+  const saldos = pendientes.map((v) =>
+    saldoVenta({
+      total: Number(v.total),
+      descuento: Number(v.descuento ?? 0),
+      total_cobrado: Number(v.total_cobrado ?? 0),
+    }),
+  );
+  const pendienteCobroTotal = saldos.reduce((a, s) => a + s, 0);
+  const pendienteCobroCantidad = saldos.filter((s) => s > 0).length;
+
+  /* --- Ganancia --- */
+  // Una prenda bordada no cuesta lo mismo que la prenda pelada: su costo real
+  // es el costo_total de la orden de producción (prenda + matriz + bordado +
+  // otros). Para esas ventas usamos ese costo; para el resto, products.costo.
+  const costoProduccionPorVenta = new Map(
+    (
+      (ordenesVendidas as { venta_id: string; costo_total: number }[]) ?? []
+    ).map((o) => [o.venta_id, Number(o.costo_total) || 0]),
+  );
+
+  const gananciaOnline = ventasOnline
+    .flatMap((v) => v.items ?? [])
+    .reduce(
+      (a, it) =>
+        a +
+        (Number(it.precio_unitario) - (costoMap.get(it.product_id ?? "") ?? 0)) *
+          Number(it.cantidad),
+      0,
+    );
+
+  const gananciaManual = ventasMan.reduce((a, v) => {
+    const costoProduccion = costoProduccionPorVenta.get(v.id);
+    if (costoProduccion !== undefined) {
+      // Venta que cierra una orden de producción: el costo ya está calculado.
+      return a + (Number(v.total) - costoProduccion);
+    }
+    return (
+      a +
+      (v.items ?? []).reduce(
+        (b, it) =>
+          b +
+          (Number(it.precio_unitario) -
+            (costoMap.get(it.product_id ?? "") ?? 0)) *
+            Number(it.cantidad),
+        0,
+      )
+    );
+  }, 0);
+
+  const gananciaMesEstimada = gananciaOnline + gananciaManual;
 
   const stockBajo = (
     (variantesBajas as unknown as {
@@ -268,6 +389,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   return {
     ventasMesTotal,
     ventasMesCantidad,
+    cobradoMesTotal,
+    pendienteCobroTotal,
+    pendienteCobroCantidad,
     comprasMesTotal,
     gananciaMesEstimada,
     productosActivos: prods.filter((p) => p.activo).length,

@@ -2,11 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   Matriz,
   MatrizConUso,
+  EstadoCobro,
   OrdenProduccion,
   OrdenProduccionVista,
   OrdenDetalle,
   ProduccionHistorialItem,
 } from "./types";
+import { saldoVenta } from "./types";
 
 /** Bucket privado donde viven los archivos de producción. */
 export const BUCKET_PRODUCCION = "produccion";
@@ -85,16 +87,48 @@ export async function getMatricesSimple(): Promise<Matriz[]> {
 
 /* ------------------------- Órdenes de producción ------------------------- */
 
+/** Datos de la venta asociada que necesitan las tarjetas Vendido/Cobrado. */
+type VentaJoin = {
+  total: number;
+  descuento: number;
+  total_cobrado: number;
+  estado_cobro: EstadoCobro;
+} | null;
+
 type OrdenRow = OrdenProduccion & {
   products: { nombre: string; imagenes: string[] } | null;
   matrices: { nombre: string } | null;
+  ventas: VentaJoin;
 };
+
+/** Campos de la venta que traemos junto a la orden. */
+const SELECT_VENTA = "ventas(total, descuento, total_cobrado, estado_cobro)";
+
+/** Aplana los datos de la venta asociada (o null si la orden no se vendió). */
+function datosVenta(v: VentaJoin) {
+  if (!v) {
+    return {
+      venta_total: null,
+      venta_estado_cobro: null,
+      venta_saldo: null,
+    };
+  }
+  return {
+    venta_total: Number(v.total),
+    venta_estado_cobro: v.estado_cobro,
+    venta_saldo: saldoVenta({
+      total: Number(v.total),
+      descuento: Number(v.descuento ?? 0),
+      total_cobrado: Number(v.total_cobrado ?? 0),
+    }),
+  };
+}
 
 export async function getOrdenesProduccion(): Promise<OrdenProduccionVista[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ordenes_produccion")
-    .select("*, products(nombre, imagenes), matrices(nombre)")
+    .select(`*, products(nombre, imagenes), matrices(nombre), ${SELECT_VENTA}`)
     .order("posicion", { ascending: true })
     .order("created_at", { ascending: false });
 
@@ -103,7 +137,7 @@ export async function getOrdenesProduccion(): Promise<OrdenProduccionVista[]> {
     return [];
   }
 
-  const filas = (data as OrdenRow[]) ?? [];
+  const filas = (data as unknown as OrdenRow[]) ?? [];
   const urls = await firmarUrls(filas.map((o) => o.imagen_ref_path));
 
   return filas.map((o) => ({
@@ -114,6 +148,7 @@ export async function getOrdenesProduccion(): Promise<OrdenProduccionVista[]> {
     product_nombre: o.products?.nombre ?? null,
     product_imagen_url: o.products?.imagenes?.[0] ?? null,
     matriz_nombre: o.matrices?.nombre ?? null,
+    ...datosVenta(o.ventas),
   }));
 }
 
@@ -123,17 +158,18 @@ export async function getOrdenProduccionById(
   const supabase = await createClient();
   const { data } = await supabase
     .from("ordenes_produccion")
-    .select("*, products(nombre, imagenes), matrices(nombre)")
+    .select(`*, products(nombre, imagenes), matrices(nombre), ${SELECT_VENTA}`)
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
-  const o = data as OrdenRow;
+  const o = data as unknown as OrdenRow;
   return {
     ...o,
     imagen_ref_url: await firmarUrl(o.imagen_ref_path),
     product_nombre: o.products?.nombre ?? null,
     product_imagen_url: o.products?.imagenes?.[0] ?? null,
     matriz_nombre: o.matrices?.nombre ?? null,
+    ...datosVenta(o.ventas),
   };
 }
 
@@ -142,12 +178,14 @@ export async function getOrdenDetalle(id: string): Promise<OrdenDetalle | null> 
   const supabase = await createClient();
   const { data } = await supabase
     .from("ordenes_produccion")
-    .select("*, products(nombre, imagenes), matrices(nombre, costo, imagen_path, archivo_path)")
+    .select(
+      `*, products(nombre, imagenes), matrices(nombre, costo, imagen_path, archivo_path), ${SELECT_VENTA}`,
+    )
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
 
-  const o = data as OrdenRow & {
+  const o = data as unknown as OrdenRow & {
     matrices:
       | {
           nombre: string;
@@ -178,6 +216,7 @@ export async function getOrdenDetalle(id: string): Promise<OrdenDetalle | null> 
       product_nombre: o.products?.nombre ?? null,
       product_imagen_url: o.products?.imagenes?.[0] ?? null,
       matriz_nombre: o.matrices?.nombre ?? null,
+      ...datosVenta(o.ventas),
     },
     imagen_ref_url: o.imagen_ref_path ? urls.get(o.imagen_ref_path) ?? null : null,
     archivo_bordado_url: o.archivo_bordado_path

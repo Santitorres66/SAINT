@@ -22,8 +22,9 @@ y un **panel de administración** privado, conectados a una base de datos
 7. [Paso 5 — Correr en local](#paso-5--correr-en-local)
 8. [Paso 6 — Deploy en Vercel](#paso-6--deploy-en-vercel)
 9. [Cómo se usa el panel admin](#cómo-se-usa-el-panel-admin)
-10. [Estructura del proyecto](#estructura-del-proyecto)
-11. [Mercado Pago (a futuro)](#mercado-pago-a-futuro)
+10. [El circuito de un pedido](#el-circuito-de-un-pedido)
+11. [Estructura del proyecto](#estructura-del-proyecto)
+12. [Pagos con Mercado Pago](#pagos-con-mercado-pago-checkout-pro)
 
 ---
 
@@ -68,16 +69,39 @@ y un **panel de administración** privado, conectados a una base de datos
 
 ## Paso 2 — Ejecutar el SQL
 
-Este script crea la tabla `products`, la seguridad (RLS) y el bucket de imágenes.
+La base se arma con varios scripts que hay que correr **en este orden** (cada
+uno depende de los anteriores):
+
+| # | Archivo | Qué crea |
+|---|---------|----------|
+| 1 | [`supabase/schema.sql`](./supabase/schema.sql) | Tabla `products`, RLS y bucket de imágenes |
+| 2 | [`supabase/orders.sql`](./supabase/orders.sql) | Órdenes de la web (Mercado Pago) y descuento de stock |
+| 3 | [`supabase/gestion.sql`](./supabase/gestion.sql) | Proveedores, compras, ventas manuales y costo |
+| 4 | [`supabase/clientes.sql`](./supabase/clientes.sql) | Master de clientes |
+| 5 | [`supabase/produccion.sql`](./supabase/produccion.sql) | Órdenes de bordado, matrices e historial |
+| 6 | [`supabase/variantes.sql`](./supabase/variantes.sql) | Stock por variante (talle + color) |
+| 7 | [`supabase/compras-tipos-pago.sql`](./supabase/compras-tipos-pago.sql) | Medio de pago y cuotas en compras |
+| 8 | [`supabase/produccion-prioridad-fecha.sql`](./supabase/produccion-prioridad-fecha.sql) | Prioridad y fecha estimada de entrega |
+| 9 | [`supabase/cobros.sql`](./supabase/cobros.sql) | Cobros de ventas y cierre del circuito |
+
+Para cada uno:
 
 1. En tu proyecto de Supabase, menú izquierdo → **SQL Editor** (ícono `</>`).
 2. Botón **+ New query**.
-3. Abrí el archivo [`supabase/schema.sql`](./supabase/schema.sql) de este
-   repositorio y **copiá y pegá todo su contenido** en el editor.
+3. Abrí el archivo, **copiá y pegá todo su contenido** en el editor.
 4. Click en **Run** (o `Ctrl/Cmd + Enter`). Debería decir _“Success”_.
-5. Verificá:
-   - **Table Editor** → aparece la tabla **`products`**.
-   - **Storage** → aparece el bucket **`productos`**.
+
+Al terminar verificá:
+
+- **Table Editor** → están `products`, `ventas`, `compras`, `clientes`,
+  `ordenes_produccion`, `cobros`…
+- **Storage** → aparecen los buckets **`productos`** (público) y
+  **`produccion`** (privado).
+
+> ⚠️ `cobros.sql` deja todas las ventas anteriores como **pendientes de
+> cobro**, porque la base no tiene forma de saber si ya se cobraron. Si esas
+> ventas ya estaban cobradas, al final del archivo hay 3 líneas comentadas que
+> las marcan como saldadas — leelas antes de ejecutarlas.
 
 ---
 
@@ -158,6 +182,49 @@ Abrí:
    - **Eliminar**: borra el producto (pide confirmación).
 3. Al **crear/editar**, cargá los datos, subí las fotos (se guardan solas) y
    guardá. El cambio aparece **al instante** en la web pública.
+
+---
+
+## El circuito de un pedido
+
+Un pedido con bordado recorre seis estados. Los cuatro primeros son trabajo de
+taller; los dos últimos son plata, y se completan **solos** desde el módulo de
+ventas.
+
+```
+Pendiente → En producción → Fabricado → Entregado → Vendido → Cobrado
+└──────────── tablero de Producción ────────────┘   └── módulo de Ventas ──┘
+```
+
+**Dónde se toca el stock.** Una sola vez, al **crear la orden de producción**:
+esa prenda sale del stock porque se va a bordar. La venta que después cierra la
+orden **no vuelve a descontarla** — se guarda con `afecta_stock = false`. Sin
+esa bandera, la misma unidad se descontaría dos veces.
+
+**Cómo se avanza.**
+
+1. **Entregado → Vendido:** botón _“Cargar como vendido”_ en la tarjeta. Abre
+   el formulario de venta precargado con la prenda y el cliente del pedido. Al
+   guardar, la venta queda vinculada a la orden (`ordenes_produccion.venta_id`)
+   y la orden pasa a `vendido`.
+2. **Vendido → Cobrado:** botón _“Registrar cobro”_. Una venta se puede cobrar
+   **en varias veces** (seña, saldo, cuotas): cada entrada de plata es una fila
+   en `cobros`. Cuando la suma de los cobros cubre `total − descuento`, la
+   base marca la venta como `cobrado` y la orden pasa sola a esa columna.
+
+**Una sola fuente de verdad.** El estado de cobro lo calcula la base
+(`recalcular_cobro_venta`) a partir de los cobros registrados: no se elige a
+mano. La orden de producción solo **refleja** lo que dice la venta, por eso el
+Kanban no deja arrastrar tarjetas a las dos últimas columnas ni volver atrás
+una orden que ya se vendió.
+
+**Facturado ≠ cobrado.** El tablero muestra los dos números por separado: lo
+facturado en el mes y la plata que efectivamente entró (por fecha de cobro),
+más el saldo pendiente de todas las ventas.
+
+**Ganancia.** Para una venta común es `precio − products.costo`. Para una venta
+que cierra una orden de producción se usa el `costo_total` de la orden (prenda
++ matriz + bordado + otros), que es el costo real de una prenda bordada.
 
 ---
 

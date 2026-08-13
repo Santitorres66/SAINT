@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BUCKET_PRODUCCION } from "@/lib/produccion";
-import type { MatrizInput, ActionResult, PrioridadProduccion } from "@/lib/types";
+import type {
+  MatrizInput,
+  ActionResult,
+  EstadoProduccion,
+  PrioridadProduccion,
+} from "@/lib/types";
 
 function revalidarProduccion() {
   revalidatePath("/admin/produccion");
@@ -322,9 +327,17 @@ export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
 
   const { data: orden } = await supabase
     .from("ordenes_produccion")
-    .select("product_id, cantidad, talle, color")
+    .select("product_id, cantidad, talle, color, venta_id")
     .eq("id", id)
     .single();
+
+  // Si ya se vendió, borrar la orden devolvería al stock una prenda que en
+  // realidad salió del negocio, y dejaría la venta sin su origen.
+  if (orden?.venta_id)
+    return {
+      error:
+        "Esta orden ya tiene una venta cargada. Eliminá primero la venta desde “Ventas”.",
+    };
 
   const { error } = await supabase
     .from("ordenes_produccion")
@@ -346,23 +359,59 @@ export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** Cambia el estado de una orden (desde el Kanban o el detalle) y lo registra. */
+/**
+ * Cambia el estado de una orden (desde el Kanban o el detalle) y lo registra.
+ *
+ * Los dos últimos estados NO se manejan desde acá: `vendido` lo produce la
+ * carga de la venta y `cobrado` el registro del cobro. La venta es la fuente
+ * de verdad de esa parte del circuito; si el Kanban pudiera moverlos a mano,
+ * el tablero mostraría una cosa y la plata otra.
+ */
 export async function cambiarEstadoProduccion(
   id: string,
-  nuevoEstado: "pendiente" | "en_produccion" | "fabricado" | "entregado",
+  nuevoEstado: EstadoProduccion,
 ): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
 
   const { data: orden } = await supabase
     .from("ordenes_produccion")
-    .select("estado, fecha_inicio, fecha_fabricacion")
+    .select("estado, fecha_inicio, fecha_fabricacion, venta_id")
     .eq("id", id)
     .single();
   if (!orden) return { error: "No se encontró la orden." };
 
   const anterior = orden.estado;
   if (anterior === nuevoEstado) return { ok: true };
+
+  if (nuevoEstado === "vendido" && !orden.venta_id)
+    return {
+      error:
+        'Para pasar a "Vendido" cargá la venta con el botón "Cargar como vendido".',
+    };
+
+  if (nuevoEstado === "cobrado") {
+    if (!orden.venta_id)
+      return { error: "Primero cargá la venta de esta orden." };
+    const { data: venta } = await supabase
+      .from("ventas")
+      .select("estado_cobro")
+      .eq("id", orden.venta_id)
+      .maybeSingle();
+    if (venta?.estado_cobro !== "cobrado")
+      return {
+        error:
+          'Esta venta todavía tiene saldo. Registrá el cobro desde "Ventas" y la orden pasa sola a "Cobrado".',
+      };
+  }
+
+  // Volver atrás con una venta ya cargada desincronizaría orden y plata.
+  const cerrados: string[] = ["vendido", "cobrado"];
+  if (cerrados.includes(anterior) && !cerrados.includes(nuevoEstado))
+    return {
+      error:
+        "Esta orden ya tiene una venta cargada. Eliminá la venta si querés volver atrás.",
+    };
 
   const ahora = new Date().toISOString();
   const updates: Record<string, unknown> = { estado: nuevoEstado };

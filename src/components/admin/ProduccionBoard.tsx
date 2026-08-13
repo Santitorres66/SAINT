@@ -16,8 +16,11 @@ import type { OrdenProduccionVista, EstadoProduccion } from "@/lib/types";
 import {
   ESTADOS_PRODUCCION,
   PRIORIDADES_PRODUCCION,
+  chipCobro,
+  labelCobro,
   estaAtrasada,
   formatNumeroOrden,
+  formatPrecio,
 } from "@/lib/constants";
 import { cambiarEstadoProduccion } from "@/app/admin/produccion-actions";
 
@@ -122,6 +125,45 @@ function Tarjeta({
         )}
       </div>
 
+      {/* Estado de la plata, una vez que la orden se vendió */}
+      {orden.venta_id && orden.venta_estado_cobro && (
+        <div className="mt-2 rounded-lg bg-neutral-50 px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${chipCobro(orden.venta_estado_cobro)}`}
+            >
+              {labelCobro(orden.venta_estado_cobro)}
+            </span>
+            <span className="text-xs font-medium text-neutral-700">
+              {formatPrecio(orden.venta_total ?? 0)}
+            </span>
+          </div>
+          {(orden.venta_saldo ?? 0) > 0 && (
+            <p className="mt-1 text-[11px] text-amber-700">
+              Falta cobrar {formatPrecio(orden.venta_saldo ?? 0)}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Cierre del circuito: vender lo entregado, cobrar lo vendido */}
+      {orden.estado === "entregado" && !orden.venta_id && (
+        <Link
+          href={`/admin/ventas/nueva?orden=${orden.id}`}
+          className="mt-2 block rounded-lg bg-neutral-900 px-2 py-1.5 text-center text-xs font-medium text-white transition hover:bg-neutral-700"
+        >
+          Cargar como vendido
+        </Link>
+      )}
+      {orden.venta_id && (orden.venta_saldo ?? 0) > 0 && (
+        <Link
+          href={`/admin/ventas?cobrar=${orden.venta_id}`}
+          className="mt-2 block rounded-lg bg-neutral-900 px-2 py-1.5 text-center text-xs font-medium text-white transition hover:bg-neutral-700"
+        >
+          Registrar cobro
+        </Link>
+      )}
+
       <div className="mt-2 flex items-center gap-2">
         {/* Fallback sin arrastrar (ideal en celular) */}
         <select
@@ -161,7 +203,9 @@ function Columna({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-2xl border ${estado.col} p-3 transition ${
+      // Ancho fijo + scroll horizontal en el contenedor: con 6 estados, una
+      // grilla que reparte el ancho dejaría las tarjetas ilegibles.
+      className={`w-[275px] shrink-0 rounded-2xl border ${estado.col} p-3 transition ${
         isOver ? "ring-2 ring-neutral-900/30" : ""
       }`}
     >
@@ -202,13 +246,32 @@ export default function ProduccionBoard({
     const actual = local.find((o) => o.id === id);
     if (!actual || actual.estado === estado) return;
     setError(null);
+
+    // "Vendido" y "Cobrado" no se marcan a mano: los produce la venta y su
+    // cobro. Si el usuario los elige, lo llevamos a donde se cargan de verdad.
+    if ((estado === "vendido" || estado === "cobrado") && !actual.venta_id) {
+      router.push(`/admin/ventas/nueva?orden=${id}`);
+      return;
+    }
+    if (estado === "cobrado" && actual.venta_id) {
+      router.push(`/admin/ventas?cobrar=${actual.venta_id}`);
+      return;
+    }
+
     // Optimista
     setLocal((prev) =>
       prev.map((o) => (o.id === id ? { ...o, estado } : o)),
     );
     startTransition(async () => {
       const res = await cambiarEstadoProduccion(id, estado);
-      if (res?.error) setError(res.error);
+      if (res?.error) {
+        setError(res.error);
+        // El servidor rechazó el cambio: deshacemos el movimiento optimista
+        // para no mostrar la tarjeta en una columna donde no está.
+        setLocal((prev) =>
+          prev.map((o) => (o.id === id ? { ...o, estado: actual.estado } : o)),
+        );
+      }
       router.refresh();
     });
   }
@@ -280,11 +343,12 @@ export default function ProduccionBoard({
 
       <p className="text-xs text-neutral-400">
         Arrastrá las tarjetas entre columnas para cambiar el estado (o usá el
-        selector de cada tarjeta).
+        selector de cada tarjeta). Las dos últimas columnas se completan solas:
+        “Vendido” al cargar la venta y “Cobrado” al registrar el cobro.
       </p>
 
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="flex gap-4 overflow-x-auto pb-3">
           {ESTADOS_PRODUCCION.map((estado) => {
             const items = filtradas.filter((o) => o.estado === estado.value);
             return (

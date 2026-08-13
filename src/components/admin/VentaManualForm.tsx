@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { Product, OrderItem, VentaManual, Cliente } from "@/lib/types";
 import { nombreCompleto } from "@/lib/types";
-import { formatPrecio } from "@/lib/constants";
+import { formatPrecio, formatNumeroOrden } from "@/lib/constants";
+import { MEDIOS_PAGO } from "@/components/admin/MedioPagoCuotas";
 import {
   createVentaManual,
   updateVentaManual,
@@ -19,7 +20,23 @@ type Linea = {
   precio_unitario: string;
 };
 
-const MEDIOS = ["Efectivo", "Transferencia", "Débito/Crédito", "Otro"];
+/**
+ * Datos de la orden de producción que esta venta cierra. Cuando vienen, el
+ * formulario arranca precargado y la venta queda vinculada a la orden.
+ */
+export type OrdenPrecargada = {
+  id: string;
+  numero: number;
+  cliente: string;
+  cliente_id: string | null;
+  product_id: string | null;
+  nombre: string;
+  talle: string;
+  color: string;
+  cantidad: number;
+  /** Costo total de producción — se muestra como referencia para el precio. */
+  costo_total: number;
+};
 
 function itemToLinea(it: OrderItem): Linea {
   return {
@@ -41,26 +58,47 @@ const LINEA_VACIA: Linea = {
   precio_unitario: "",
 };
 
+/** Arma la línea inicial a partir de una orden de producción. */
+function lineaDeOrden(o: OrdenPrecargada): Linea {
+  return {
+    product_id: o.product_id ?? "",
+    nombre: o.nombre,
+    talle: o.talle,
+    color: o.color,
+    cantidad: String(o.cantidad || 1),
+    precio_unitario: "",
+  };
+}
+
 /**
  * Formulario para registrar o EDITAR una venta manual.
  * Cada ítem puede elegirse de la lista de productos o escribirse a mano.
+ *
+ * Si viene `orden`, la venta cierra esa orden de producción: queda vinculada
+ * y NO descuenta stock (la prenda ya salió al crear la orden).
  */
 export default function VentaManualForm({
   products,
   clientes,
   initial,
+  orden,
 }: {
   products: Product[];
   clientes: Cliente[];
   initial?: VentaManual;
+  orden?: OrdenPrecargada;
 }) {
   const esEdicion = Boolean(initial);
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const hoy = new Date().toISOString().slice(0, 10);
-  const [cliente, setCliente] = useState(initial?.cliente ?? "");
-  const [clienteId, setClienteId] = useState(initial?.cliente_id ?? "");
+  const [cliente, setCliente] = useState(
+    initial?.cliente ?? orden?.cliente ?? "",
+  );
+  const [clienteId, setClienteId] = useState(
+    initial?.cliente_id ?? orden?.cliente_id ?? "",
+  );
 
   function elegirCliente(id: string) {
     setClienteId(id);
@@ -72,8 +110,13 @@ export default function VentaManualForm({
     initial?.fecha ? initial.fecha.slice(0, 10) : hoy,
   );
   const [notas, setNotas] = useState(initial?.notas ?? "");
+  const [descuento, setDescuento] = useState(String(initial?.descuento ?? 0));
   const [lineas, setLineas] = useState<Linea[]>(
-    initial?.items?.length ? initial.items.map(itemToLinea) : [LINEA_VACIA],
+    initial?.items?.length
+      ? initial.items.map(itemToLinea)
+      : orden
+        ? [lineaDeOrden(orden)]
+        : [LINEA_VACIA],
   );
 
   function actualizar(i: number, campo: keyof Linea, valor: string) {
@@ -110,6 +153,8 @@ export default function VentaManualForm({
     (a, l) => a + (Number(l.cantidad) || 0) * (Number(l.precio_unitario) || 0),
     0,
   );
+  const descuentoNum = Math.max(Number(descuento) || 0, 0);
+  const aCobrar = Math.max(total - descuentoNum, 0);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -131,6 +176,11 @@ export default function VentaManualForm({
       return;
     }
 
+    if (descuentoNum > total) {
+      setError("El descuento no puede ser mayor que el total.");
+      return;
+    }
+
     const payload = {
       cliente,
       cliente_id: clienteId || null,
@@ -138,6 +188,8 @@ export default function VentaManualForm({
       fecha,
       items,
       notas,
+      descuento: descuentoNum,
+      orden_produccion_id: orden?.id ?? null,
     };
 
     startTransition(async () => {
@@ -160,6 +212,26 @@ export default function VentaManualForm({
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </p>
+      )}
+
+      {/* Venta que cierra una orden de producción */}
+      {orden && (
+        <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5">
+          <p className="text-sm font-medium text-purple-900">
+            Esta venta cierra la orden{" "}
+            <span className="font-mono">{formatNumeroOrden(orden.numero)}</span>
+          </p>
+          <p className="mt-1 text-sm text-purple-800">
+            Al guardarla, la orden pasa a <strong>Vendido</strong>. El stock no
+            se toca: esa prenda ya salió cuando se creó la orden.
+          </p>
+          {orden.costo_total > 0 && (
+            <p className="mt-2 text-sm text-purple-800">
+              Costo de producción: {formatPrecio(orden.costo_total)} — poné un
+              precio de venta por encima de ese número.
+            </p>
+          )}
+        </div>
       )}
 
       {/* Datos generales */}
@@ -204,10 +276,10 @@ export default function VentaManualForm({
             className={inputClase}
           >
             {/* Si el medio guardado no está en la lista, lo agregamos */}
-            {!MEDIOS.includes(medioPago) && medioPago && (
+            {!MEDIOS_PAGO.includes(medioPago) && medioPago && (
               <option value={medioPago}>{medioPago}</option>
             )}
-            {MEDIOS.map((m) => (
+            {MEDIOS_PAGO.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
@@ -319,11 +391,41 @@ export default function VentaManualForm({
           + Agregar otro producto
         </button>
 
-        <div className="flex items-center justify-between border-t border-neutral-100 pt-4">
-          <span className="text-sm text-neutral-500">Total de la venta</span>
-          <span className="text-xl font-semibold text-neutral-900">
-            {formatPrecio(total)}
-          </span>
+        <div className="space-y-3 border-t border-neutral-100 pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-neutral-500">Total de la venta</span>
+            <span className="text-lg font-medium text-neutral-900">
+              {formatPrecio(total)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <label htmlFor="descuento" className="text-sm text-neutral-500">
+              Descuento (opcional)
+            </label>
+            <input
+              id="descuento"
+              type="number"
+              min="0"
+              step="0.01"
+              value={descuento}
+              onChange={(e) => setDescuento(e.target.value)}
+              className="w-40 rounded-lg border border-neutral-300 px-3 py-2 text-right text-sm outline-none focus:border-neutral-900"
+            />
+          </div>
+
+          <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
+            <span className="text-sm font-medium text-neutral-700">
+              A cobrar
+            </span>
+            <span className="text-xl font-semibold text-neutral-900">
+              {formatPrecio(aCobrar)}
+            </span>
+          </div>
+          <p className="text-xs text-neutral-400">
+            La venta se guarda como pendiente de cobro. Después registrás los
+            cobros (uno o varios) desde la lista de ventas.
+          </p>
         </div>
       </section>
 
@@ -344,7 +446,7 @@ export default function VentaManualForm({
 
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Link
-          href="/admin/ventas"
+          href={orden ? "/admin/produccion" : "/admin/ventas"}
           className="rounded-xl border border-neutral-300 px-6 py-3 font-medium text-neutral-700 transition hover:bg-neutral-100"
         >
           Cancelar
@@ -358,7 +460,9 @@ export default function VentaManualForm({
             ? "Guardando…"
             : esEdicion
               ? "Guardar cambios"
-              : "Registrar venta"}
+              : orden
+                ? "Registrar venta y cerrar la orden"
+                : "Registrar venta"}
         </button>
       </div>
     </form>

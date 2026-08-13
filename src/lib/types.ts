@@ -151,7 +151,41 @@ export interface Compra {
   proveedor_nombre?: string | null;
 }
 
-/** Una venta manual (resta stock). Reusa OrderItem para los ítems. */
+/* ------------------------------- Cobros ------------------------------- */
+
+/**
+ * Estado de cobro de una venta. Lo calcula la base a partir de los cobros
+ * registrados (ver `recalcular_cobro_venta` en supabase/cobros.sql).
+ */
+export type EstadoCobro = "pendiente" | "parcial" | "cobrado";
+
+/** Una entrada de plata de una venta (seña, saldo, cuota…). */
+export interface Cobro {
+  id: string;
+  venta_id: string;
+  fecha: string;
+  monto: number;
+  medio_pago: string;
+  cuotas: number;
+  monto_cuota: number;
+  notas: string;
+  created_at: string;
+}
+
+/** Datos que manda el formulario al registrar un cobro. */
+export type CobroInput = {
+  fecha: string;
+  monto: number;
+  medio_pago: string;
+  cuotas: number;
+  notas: string;
+};
+
+/**
+ * Una venta manual. Resta stock salvo que venga de una orden de producción
+ * (`afecta_stock: false`), porque en ese caso la prenda ya salió del stock
+ * cuando se creó la orden.
+ */
 export interface VentaManual {
   id: string;
   created_at: string;
@@ -162,6 +196,32 @@ export interface VentaManual {
   total: number;
   items: OrderItem[];
   notas: string;
+  /** Rebaja acordada sobre el total al momento de cobrar. */
+  descuento: number;
+  /** Suma de los cobros registrados (la mantiene la base). */
+  total_cobrado: number;
+  estado_cobro: EstadoCobro;
+  /** Se completa cuando la venta queda saldada. */
+  fecha_cobro: string | null;
+  /**
+   * false cuando la venta nace de una orden de producción: esa prenda ya se
+   * descontó del stock al crear la orden y no se debe descontar de nuevo.
+   */
+  afecta_stock: boolean;
+  /** Cobros de esta venta (solo al pedir el detalle). */
+  cobros?: Cobro[];
+}
+
+/** Lo que falta cobrar de una venta: total − descuento − cobrado. */
+export function saldoVenta(v: {
+  total: number;
+  descuento: number;
+  total_cobrado: number;
+}): number {
+  return Math.max(
+    Number(v.total) - Number(v.descuento) - Number(v.total_cobrado),
+    0,
+  );
 }
 
 /** Fila unificada para el listado de ventas (online + manual). */
@@ -174,15 +234,32 @@ export interface VentaUnificada {
   estado: string;
   total: number;
   items: OrderItem[];
+  /* --- Cobro (las ventas web de Mercado Pago ya vienen cobradas) --- */
+  estado_cobro: EstadoCobro;
+  descuento: number;
+  total_cobrado: number;
+  saldo: number;
+  fecha_cobro: string | null;
+  cobros: Cobro[];
+  /** N° de la orden de producción que la originó (para mostrar el vínculo). */
+  orden_numero: number | null;
+  orden_id: string | null;
 }
 
 /* ---------------------- Producción de bordados ---------------------- */
 
+/**
+ * Estados del circuito completo de un pedido. Los dos últimos cierran el
+ * ciclo con el módulo de ventas: `vendido` cuando la orden tiene una venta
+ * asociada, `cobrado` cuando esa venta quedó saldada.
+ */
 export type EstadoProduccion =
   | "pendiente"
   | "en_produccion"
   | "fabricado"
-  | "entregado";
+  | "entregado"
+  | "vendido"
+  | "cobrado";
 
 export type PrioridadProduccion = "alta" | "media" | "baja";
 
@@ -238,6 +315,10 @@ export interface OrdenProduccion {
   fecha_estimada_entrega: string | null;
   fecha_inicio: string | null;
   fecha_fabricacion: string | null;
+  /** Venta que cerró esta orden (null hasta que se carga como vendida). */
+  venta_id: string | null;
+  fecha_venta: string | null;
+  fecha_cobro: string | null;
   costo_prenda: number;
   costo_matriz: number;
   costo_bordado: number;
@@ -254,6 +335,10 @@ export interface OrdenProduccionVista extends OrdenProduccion {
   product_nombre: string | null;
   product_imagen_url: string | null; // foto del producto (catálogo), pública
   matriz_nombre: string | null;
+  /* --- Datos de la venta asociada, para las columnas Vendido/Cobrado --- */
+  venta_total: number | null;
+  venta_estado_cobro: EstadoCobro | null;
+  venta_saldo: number | null;
 }
 
 /** Una fila del historial de estados. */
@@ -281,8 +366,15 @@ export interface OrdenDetalle {
 
 /** Números para el tablero de resumen. */
 export interface DashboardStats {
+  /** Facturado en el mes (lo vendido, esté cobrado o no). */
   ventasMesTotal: number;
   ventasMesCantidad: number;
+  /** Plata que efectivamente entró en el mes. */
+  cobradoMesTotal: number;
+  /** Saldo pendiente de cobro, de todas las ventas (no solo del mes). */
+  pendienteCobroTotal: number;
+  /** Cuántas ventas tienen saldo pendiente. */
+  pendienteCobroCantidad: number;
   comprasMesTotal: number;
   gananciaMesEstimada: number;
   productosActivos: number;

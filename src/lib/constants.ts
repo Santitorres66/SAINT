@@ -72,10 +72,58 @@ export const ESTADOS_PRODUCCION = [
     col: "bg-neutral-100 border-neutral-200",
     chip: "bg-neutral-200 text-neutral-700",
   },
+  {
+    value: "vendido",
+    label: "Vendido",
+    col: "bg-purple-50 border-purple-200",
+    chip: "bg-purple-100 text-purple-800",
+  },
+  {
+    value: "cobrado",
+    label: "Cobrado",
+    col: "bg-emerald-50 border-emerald-200",
+    chip: "bg-emerald-100 text-emerald-800",
+  },
 ] as const;
 
 export function labelEstado(value: string): string {
   return ESTADOS_PRODUCCION.find((e) => e.value === value)?.label ?? value;
+}
+
+/**
+ * Estados en los que la orden ya salió del taller: no tiene sentido marcarlos
+ * como atrasados ni volver a descontar stock.
+ */
+export const ESTADOS_CERRADOS = ["entregado", "vendido", "cobrado"] as const;
+
+/** Estado de cobro de una venta, con su etiqueta y color. */
+export const ESTADOS_COBRO = [
+  {
+    value: "pendiente",
+    label: "Pendiente de cobro",
+    chip: "bg-amber-100 text-amber-800",
+  },
+  {
+    value: "parcial",
+    label: "Cobro parcial",
+    chip: "bg-blue-100 text-blue-800",
+  },
+  {
+    value: "cobrado",
+    label: "Cobrado",
+    chip: "bg-emerald-100 text-emerald-800",
+  },
+] as const;
+
+export function labelCobro(value: string): string {
+  return ESTADOS_COBRO.find((e) => e.value === value)?.label ?? value;
+}
+
+export function chipCobro(value: string): string {
+  return (
+    ESTADOS_COBRO.find((e) => e.value === value)?.chip ??
+    "bg-neutral-100 text-neutral-600"
+  );
 }
 
 /** Prioridad de una orden de producción. Sin rojo: ese color queda reservado
@@ -99,7 +147,11 @@ export function estaAtrasada(
   fechaEstimadaEntrega: string | null,
   estado: string,
 ): boolean {
-  if (!fechaEstimadaEntrega || estado === "entregado") return false;
+  if (
+    !fechaEstimadaEntrega ||
+    (ESTADOS_CERRADOS as readonly string[]).includes(estado)
+  )
+    return false;
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
   const limite = new Date(fechaEstimadaEntrega);

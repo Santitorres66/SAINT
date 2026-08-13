@@ -22,6 +22,43 @@ export default async function TableroPage() {
       {/* Analítica de ventas (KPIs + gráfico, con filtro de fecha) */}
       <AnaliticaVentas ventas={ventas} />
 
+      {/* Cobranza: facturar no es cobrar. Estos números separan lo que
+          vendiste de la plata que realmente entró. */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+          <p className="text-sm text-neutral-500">Facturado este mes</p>
+          <p className="mt-1 text-2xl font-semibold text-neutral-900">
+            {formatPrecio(stats.ventasMesTotal)}
+          </p>
+          <p className="mt-1 text-xs text-neutral-400">
+            {stats.ventasMesCantidad}{" "}
+            {stats.ventasMesCantidad === 1 ? "venta" : "ventas"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+          <p className="text-sm text-neutral-500">Cobrado este mes</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-700">
+            {formatPrecio(stats.cobradoMesTotal)}
+          </p>
+          <p className="mt-1 text-xs text-neutral-400">
+            plata que entró, por fecha de cobro
+          </p>
+        </div>
+        <Link
+          href="/admin/ventas"
+          className="rounded-2xl border border-neutral-200 bg-white p-5 transition hover:border-neutral-400 hover:shadow-sm"
+        >
+          <p className="text-sm text-neutral-500">Pendiente de cobro</p>
+          <p className="mt-1 text-2xl font-semibold text-amber-700">
+            {formatPrecio(stats.pendienteCobroTotal)}
+          </p>
+          <p className="mt-1 text-xs text-neutral-400">
+            {stats.pendienteCobroCantidad}{" "}
+            {stats.pendienteCobroCantidad === 1 ? "venta" : "ventas"} con saldo
+          </p>
+        </Link>
+      </div>
+
       {/* Stock valorizado (capital) */}
       <div className="rounded-2xl border border-neutral-200 bg-gradient-to-br from-neutral-900 to-neutral-700 p-6 text-white">
         <p className="text-sm text-white/70">

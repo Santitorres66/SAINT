@@ -6,9 +6,11 @@ import EliminarOrdenBtn from "@/components/admin/EliminarOrdenBtn";
 import {
   ESTADOS_PRODUCCION,
   PRIORIDADES_PRODUCCION,
+  chipCobro,
   estaAtrasada,
   formatNumeroOrden,
   formatPrecio,
+  labelCobro,
   labelEstado,
   labelPrioridad,
 } from "@/lib/constants";
@@ -238,6 +240,79 @@ export default async function DetalleOrdenPage({
                 <Dato label="Fabricación" valor={fecha(orden.fecha_fabricacion)} />
               </dl>
             </div>
+          </section>
+
+          {/* VENTA Y COBRO — cierre del circuito */}
+          <section className={cardClase}>
+            <h2 className={h2Clase}>Venta y cobro</h2>
+            {!orden.venta_id ? (
+              <div>
+                <p className="text-sm text-neutral-500">
+                  Esta orden todavía no se vendió.
+                </p>
+                {orden.estado === "entregado" ? (
+                  <Link
+                    href={`/admin/ventas/nueva?orden=${orden.id}`}
+                    className="mt-3 inline-block rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700"
+                  >
+                    Cargar como vendido
+                  </Link>
+                ) : (
+                  <p className="mt-2 text-xs text-neutral-400">
+                    Se puede vender una vez que esté entregada.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${chipCobro(orden.venta_estado_cobro ?? "pendiente")}`}
+                  >
+                    {labelCobro(orden.venta_estado_cobro ?? "pendiente")}
+                  </span>
+                  <span className="text-lg font-semibold text-neutral-900">
+                    {formatPrecio(orden.venta_total ?? 0)}
+                  </span>
+                </div>
+
+                <dl className="space-y-3">
+                  <Dato label="Fecha de venta" valor={fecha(orden.fecha_venta)} />
+                  {(orden.venta_saldo ?? 0) > 0 ? (
+                    <Dato
+                      label="Saldo pendiente"
+                      valor={
+                        <span className="font-medium text-amber-700">
+                          {formatPrecio(orden.venta_saldo ?? 0)}
+                        </span>
+                      }
+                    />
+                  ) : (
+                    <Dato label="Cobro completo" valor={fecha(orden.fecha_cobro)} />
+                  )}
+                  {/* Lo vendido menos lo que costó producirlo */}
+                  <Dato
+                    label="Ganancia"
+                    valor={
+                      <span className="font-medium">
+                        {formatPrecio(
+                          (orden.venta_total ?? 0) - orden.costo_total,
+                        )}
+                      </span>
+                    }
+                  />
+                </dl>
+
+                <Link
+                  href={`/admin/ventas?cobrar=${orden.venta_id}`}
+                  className="inline-block rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+                >
+                  {(orden.venta_saldo ?? 0) > 0
+                    ? "Registrar cobro"
+                    : "Ver cobros"}
+                </Link>
+              </div>
+            )}
           </section>
 
           {/* COSTOS */}
