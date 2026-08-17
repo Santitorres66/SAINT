@@ -57,6 +57,19 @@ export async function getCompras(): Promise<Compra[]> {
   }));
 }
 
+export async function getCompraById(id: string): Promise<Compra | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("compras")
+    .select("*, proveedores(nombre)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+
+  const c = data as Compra & { proveedores: { nombre: string } | null };
+  return { ...c, proveedor_nombre: c.proveedores?.nombre ?? null };
+}
+
 /* -------------------------------- Ventas --------------------------------- */
 
 export async function getVentaManualById(

@@ -199,6 +199,87 @@ export async function createCompra(input: {
   redirect("/admin/compras");
 }
 
+/**
+ * Edita una compra ya cargada. Como la compra suma stock, primero devolvemos
+ * (descontamos) lo que había sumado la versión anterior y después sumamos lo
+ * de la versión nueva. El costo del producto queda con el de esta compra.
+ */
+export async function updateCompra(
+  id: string,
+  input: {
+    proveedor_id: string | null;
+    fecha: string;
+    items: CompraItem[];
+    medio_pago: string;
+    cuotas: number;
+    monto_cuota: number;
+    notas: string;
+  },
+): Promise<ActionResult> {
+  if (!input.items?.length)
+    return { error: "Agregá al menos un ítem a la compra." };
+
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { data: previa } = await supabase
+    .from("compras")
+    .select("items")
+    .eq("id", id)
+    .maybeSingle();
+  if (!previa) return { error: "No se encontró la compra." };
+
+  // Revertimos el stock que había sumado la compra anterior
+  for (const it of (previa.items ?? []) as CompraItem[]) {
+    if ((it.tipo ?? "mercaderia") !== "mercaderia" || !it.product_id) continue;
+    await supabase.rpc("descontar_stock_variante", {
+      p_product_id: it.product_id,
+      p_talle: it.talle ?? "",
+      p_color: it.color ?? "",
+      p_cantidad: it.cantidad,
+    });
+  }
+
+  const total = input.items.reduce(
+    (a, i) => a + i.cantidad * i.costo_unitario,
+    0,
+  );
+
+  const { error } = await supabase
+    .from("compras")
+    .update({
+      proveedor_id: input.proveedor_id,
+      fecha: input.fecha || new Date().toISOString(),
+      total,
+      items: input.items,
+      medio_pago: input.medio_pago?.trim() ?? "",
+      cuotas: input.cuotas || 1,
+      monto_cuota: input.monto_cuota || 0,
+      notas: input.notas?.trim() ?? "",
+    })
+    .eq("id", id);
+
+  if (error) return { error: `No se pudo guardar la compra: ${error.message}` };
+
+  // Sumamos el stock de los ítems nuevos (y refrescamos el costo)
+  for (const it of input.items) {
+    if ((it.tipo ?? "mercaderia") !== "mercaderia" || !it.product_id) continue;
+    await supabase.rpc("sumar_stock_variante", {
+      p_product_id: it.product_id,
+      p_talle: it.talle ?? "",
+      p_color: it.color ?? "",
+      p_cantidad: it.cantidad,
+    });
+    await supabase
+      .from("products")
+      .update({ costo: it.costo_unitario })
+      .eq("id", it.product_id);
+  }
+
+  revalidarGestion();
+  redirect("/admin/compras");
+}
+
 export async function deleteCompra(id: string): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };

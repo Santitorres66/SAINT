@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Compra } from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
@@ -84,12 +85,20 @@ export default function ComprasList({ compras }: { compras: Compra[] }) {
                     {formatPrecio(c.monto_cuota)}
                   </p>
                 )}
-                <button
-                  onClick={() => setABorrar(c)}
-                  className="mt-1 text-xs font-medium text-red-600 hover:underline"
-                >
-                  Eliminar
-                </button>
+                <div className="mt-1 flex justify-end gap-3">
+                  <Link
+                    href={`/admin/compras/editar/${c.id}`}
+                    className="text-xs font-medium text-neutral-600 hover:underline"
+                  >
+                    Editar
+                  </Link>
+                  <button
+                    onClick={() => setABorrar(c)}
+                    className="text-xs font-medium text-red-600 hover:underline"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
             </div>
 

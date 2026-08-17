@@ -2,9 +2,15 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { Product, Proveedor, CompraItem, TipoItemCompra } from "@/lib/types";
+import type {
+  Product,
+  Proveedor,
+  Compra,
+  CompraItem,
+  TipoItemCompra,
+} from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
-import { createCompra } from "@/app/admin/gestion-actions";
+import { createCompra, updateCompra } from "@/app/admin/gestion-actions";
 import MedioPagoCuotas from "./MedioPagoCuotas";
 
 const TIPOS_ITEM: { value: TipoItemCompra; label: string }[] = [
@@ -23,33 +29,61 @@ type Linea = {
   costo_unitario: string;
 };
 
-/** Formulario para cargar una compra a un proveedor (suma stock). */
+const LINEA_VACIA: Linea = {
+  tipo: "mercaderia",
+  product_id: "",
+  descripcion: "",
+  talle: "",
+  color: "",
+  cantidad: "1",
+  costo_unitario: "",
+};
+
+/** Pasa un ítem guardado al formato editable del formulario. */
+function itemToLinea(it: CompraItem): Linea {
+  const tipo = it.tipo ?? "mercaderia";
+  return {
+    tipo,
+    product_id: it.product_id ?? "",
+    descripcion: tipo === "mercaderia" ? "" : it.nombre,
+    talle: it.talle ?? "",
+    color: it.color ?? "",
+    cantidad: String(it.cantidad),
+    costo_unitario: String(it.costo_unitario),
+  };
+}
+
+/**
+ * Formulario para cargar o EDITAR una compra a un proveedor (suma stock).
+ * Al editar, la acción revierte el stock viejo antes de aplicar el nuevo.
+ */
 export default function CompraForm({
   products,
   proveedores,
+  initial,
 }: {
   products: Product[];
   proveedores: Proveedor[];
+  initial?: Compra;
 }) {
+  const esEdicion = Boolean(initial);
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const hoy = new Date().toISOString().slice(0, 10);
-  const [proveedorId, setProveedorId] = useState("");
-  const [fecha, setFecha] = useState(hoy);
-  const [notas, setNotas] = useState("");
-  const [medioPago, setMedioPago] = useState("");
-  const [cuotas, setCuotas] = useState("1");
-  const lineaVacia: Linea = {
-    tipo: "mercaderia",
-    product_id: "",
-    descripcion: "",
-    talle: "",
-    color: "",
-    cantidad: "1",
-    costo_unitario: "",
-  };
-  const [lineas, setLineas] = useState<Linea[]>([{ ...lineaVacia }]);
+  const [proveedorId, setProveedorId] = useState(initial?.proveedor_id ?? "");
+  const [fecha, setFecha] = useState(
+    initial?.fecha ? initial.fecha.slice(0, 10) : hoy,
+  );
+  const [notas, setNotas] = useState(initial?.notas ?? "");
+  const [medioPago, setMedioPago] = useState(initial?.medio_pago ?? "");
+  const [cuotas, setCuotas] = useState(String(initial?.cuotas ?? 1));
+  const lineaVacia = LINEA_VACIA;
+  const [lineas, setLineas] = useState<Linea[]>(
+    initial?.items?.length
+      ? initial.items.map(itemToLinea)
+      : [{ ...lineaVacia }],
+  );
 
   function actualizar(i: number, campo: keyof Linea, valor: string) {
     setLineas((prev) =>
@@ -129,16 +163,20 @@ export default function CompraForm({
 
     const nCuotas = Number(cuotas) || 1;
 
+    const payload = {
+      proveedor_id: proveedorId || null,
+      fecha,
+      items,
+      medio_pago: medioPago,
+      cuotas: nCuotas,
+      monto_cuota: nCuotas > 0 ? total / nCuotas : 0,
+      notas,
+    };
+
     startTransition(async () => {
-      const res = await createCompra({
-        proveedor_id: proveedorId || null,
-        fecha,
-        items,
-        medio_pago: medioPago,
-        cuotas: nCuotas,
-        monto_cuota: nCuotas > 0 ? total / nCuotas : 0,
-        notas,
-      });
+      const res = esEdicion
+        ? await updateCompra(initial!.id, payload)
+        : await createCompra(payload);
       if (res?.error) setError(res.error);
     });
   }
@@ -152,6 +190,13 @@ export default function CompraForm({
       {error && (
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
+        </p>
+      )}
+
+      {esEdicion && (
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          Al guardar, se <strong>revierte el stock</strong> que había sumado
+          esta compra y se aplica el de los ítems que dejes acá.
         </p>
       )}
 
@@ -400,7 +445,11 @@ export default function CompraForm({
           disabled={guardando}
           className="rounded-xl bg-neutral-900 px-8 py-3 text-base font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
         >
-          {guardando ? "Guardando…" : "Registrar compra"}
+          {guardando
+            ? "Guardando…"
+            : esEdicion
+              ? "Guardar cambios"
+              : "Registrar compra"}
         </button>
       </div>
     </form>
