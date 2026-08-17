@@ -5,25 +5,33 @@ import type { Product, ProductVariante } from "@/lib/types";
 import { formatPrecio, whatsappLink } from "@/lib/constants";
 import { useCart } from "@/lib/cart/CartContext";
 import SizeChart from "@/components/SizeChart";
+import ShareButton from "@/components/ShareButton";
 
 /**
  * Panel de compra del detalle de producto: selección de talle y color
  * (respetando el stock por variante), bloque del bordado y "Agregar al carrito".
+ *
+ * `talleInicial` / `colorInicial` vienen del link compartido: quien lo abre ve
+ * la misma combinación que estaba mirando la persona que se lo mandó.
  */
 export default function ProductPurchasePanel({
   product,
   variantes,
+  talleInicial = null,
+  colorInicial = null,
 }: {
   product: Product;
   variantes: ProductVariante[];
+  talleInicial?: string | null;
+  colorInicial?: string | null;
 }) {
   const { addItem, items } = useCart();
-  // Si hay una sola opción, la dejamos elegida de una.
+  // Preferimos lo que venga del link; si no, y hay una sola opción, esa.
   const [talle, setTalle] = useState<string | null>(
-    product.talles.length === 1 ? product.talles[0] : null,
+    talleInicial ?? (product.talles.length === 1 ? product.talles[0] : null),
   );
   const [color, setColor] = useState<string | null>(
-    product.colores.length === 1 ? product.colores[0] : null,
+    colorInicial ?? (product.colores.length === 1 ? product.colores[0] : null),
   );
   const [aviso, setAviso] = useState<string | null>(null);
 
@@ -216,6 +224,13 @@ export default function ProductPurchasePanel({
           {sinStock ? "Sin stock" : "Agregar al carrito"}
         </button>
         {aviso && <p className="text-xs text-red-400">{aviso}</p>}
+
+        <ShareButton
+          nombre={product.nombre}
+          precio={product.precio}
+          talle={talle}
+          color={color}
+        />
       </div>
 
       {/* Bloque de bordado personalizado */}

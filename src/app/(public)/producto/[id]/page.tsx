@@ -5,23 +5,38 @@ import Gallery from "@/components/Gallery";
 import ProductPurchasePanel from "@/components/ProductPurchasePanel";
 import { getProductById, getProductVariantes } from "@/lib/products";
 
-/** SEO dinámico por producto. */
+/**
+ * SEO dinámico por producto. Si el link llega con talle/color (lo compartió
+ * alguien desde el panel), lo nombramos en el título: la previsualización de
+ * WhatsApp muestra la combinación concreta que le interesó.
+ */
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ talle?: string; color?: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
   const product = await getProductById(id);
   if (!product) return { title: "Producto no encontrado" };
 
+  const { talle, color } = await searchParams;
+  const detalle = [
+    talle && product.talles.includes(talle) ? `talle ${talle}` : null,
+    color && product.colores.includes(color) ? color : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const titulo = detalle ? `${product.nombre} (${detalle})` : product.nombre;
+
   return {
-    title: product.nombre,
+    title: titulo,
     description:
       product.descripcion?.slice(0, 155) ||
       `${product.nombre} — SAINT. Único a través del bordado personalizado.`,
     openGraph: {
-      title: `${product.nombre} · SAINT`,
+      title: `${titulo} · SAINT`,
       description: product.descripcion?.slice(0, 155),
       images: product.imagenes?.[0] ? [product.imagenes[0]] : [],
     },
@@ -34,8 +49,10 @@ export async function generateMetadata({
  */
 export default async function ProductoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ talle?: string; color?: string }>;
 }) {
   const { id } = await params;
   const product = await getProductById(id);
@@ -43,6 +60,12 @@ export default async function ProductoPage({
   if (!product) notFound();
 
   const variantes = await getProductVariantes(id);
+
+  // Talle y color del link compartido. Los validamos contra el producto para
+  // no arrancar con una combinación que no existe.
+  const { talle, color } = await searchParams;
+  const talleInicial = talle && product.talles.includes(talle) ? talle : null;
+  const colorInicial = color && product.colores.includes(color) ? color : null;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
@@ -56,7 +79,12 @@ export default async function ProductoPage({
 
       <div className="grid gap-12 lg:grid-cols-2">
         <Gallery imagenes={product.imagenes} nombre={product.nombre} />
-        <ProductPurchasePanel product={product} variantes={variantes} />
+        <ProductPurchasePanel
+          product={product}
+          variantes={variantes}
+          talleInicial={talleInicial}
+          colorInicial={colorInicial}
+        />
       </div>
     </div>
   );
