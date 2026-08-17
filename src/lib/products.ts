@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Product, ProductVariante } from "./types";
+import type { Product, ProductVariante, StockCorreccion } from "./types";
 
 /**
  * Capa de acceso a datos (solo lecturas del lado del servidor).
@@ -66,6 +66,26 @@ export async function getProductVariantes(
     .order("talle", { ascending: true })
     .order("color", { ascending: true });
   return (data as ProductVariante[]) ?? [];
+}
+
+/** Últimas correcciones manuales de stock de un producto (más nueva primero). */
+export async function getCorreccionesStock(
+  productId: string,
+  limit = 20,
+): Promise<StockCorreccion[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stock_correcciones")
+    .select("*")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    // La tabla puede no existir todavía (falta correr stock-correcciones.sql).
+    console.warn("getCorreccionesStock:", error.message);
+    return [];
+  }
+  return (data as StockCorreccion[]) ?? [];
 }
 
 /** Todas las variantes (para la vista de productos del admin). */

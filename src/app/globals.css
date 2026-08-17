@@ -24,6 +24,19 @@
     @apply bg-saint-white text-saint-black;
   }
 
+  /* Campos numéricos sin flechitas: molestan y se tocan sin querer.
+     La cantidad se escribe, no se sube de a uno. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   /* Scrollbar sobria en navegadores webkit */
   ::-webkit-scrollbar {
     width: 10px;

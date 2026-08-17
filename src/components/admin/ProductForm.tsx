@@ -9,6 +9,7 @@ import type {
   Categoria,
   ProductVariante,
   VarianteInput,
+  StockCorreccion,
 } from "@/lib/types";
 import {
   CATEGORIAS,
@@ -18,19 +19,33 @@ import {
 import { createProduct, updateProduct } from "@/app/admin/actions";
 import ImageUploader from "./ImageUploader";
 
+function formatFechaHora(iso: string) {
+  return new Intl.DateTimeFormat("es-AR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(iso));
+}
+
 /**
  * Formulario para CREAR o EDITAR un producto.
  * Pensado para uso no técnico: campos con textos guía, validaciones amables
  * y controles simples (botones y chips en vez de escribir listas separadas por comas).
+ *
+ * En edición, el stock no se "edita": se CORRIGE. Cambiar un número exige un
+ * motivo y queda asentado, porque el movimiento normal del stock son las
+ * compras, las ventas y las pérdidas.
  */
 export default function ProductForm({
   initial,
   variantesIniciales,
+  correccionesPrevias = [],
 }: {
   /** Si viene, el formulario está en modo edición. */
   initial?: Product;
   /** Stock por variante existente (en edición). */
   variantesIniciales?: ProductVariante[];
+  /** Historial de correcciones manuales de este producto. */
+  correccionesPrevias?: StockCorreccion[];
 }) {
   const router = useRouter();
   const esEdicion = Boolean(initial);
@@ -94,10 +109,39 @@ export default function ProductForm({
     0,
   );
 
+  /* --- Correcciones de stock ---
+     El stock de una variante que ya existe no se edita "a mano": se corrige.
+     Guardamos el valor con el que abrió el formulario para saber qué cambió
+     de verdad y pedir el motivo solo en ese caso. */
+  const stockOriginal = new Map(
+    (variantesIniciales ?? []).map((v) => [keyVar(v.talle, v.color), v.stock]),
+  );
+  const [motivo, setMotivo] = useState("");
+
+  /** Variantes ya existentes cuyo número cambió respecto del original. */
+  const correcciones = combos
+    .filter((c) => stockOriginal.has(keyVar(c.talle, c.color)))
+    .map((c) => {
+      const k = keyVar(c.talle, c.color);
+      const anterior = stockOriginal.get(k)!;
+      const nuevo = Number(stockVar[k]) || 0;
+      return { talle: c.talle, color: c.color, anterior, nuevo };
+    })
+    .filter((c) => c.nuevo !== c.anterior);
+
+  const hayCorrecciones = correcciones.length > 0;
+
   // --- Envío ---
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (hayCorrecciones && !motivo.trim()) {
+      setError(
+        "Estás corrigiendo el stock: escribí el motivo (por qué no coincidía).",
+      );
+      return;
+    }
 
     const variantes: VarianteInput[] = combos.map((c) => ({
       talle: c.talle,
@@ -120,7 +164,17 @@ export default function ProductForm({
 
     startTransition(async () => {
       const res = esEdicion
-        ? await updateProduct(initial!.id, input, variantes)
+        ? await updateProduct(
+            initial!.id,
+            input,
+            variantes,
+            correcciones.map((c) => ({
+              talle: c.talle,
+              color: c.color,
+              stock_nuevo: c.nuevo,
+            })),
+            motivo,
+          )
         : await createProduct(input, variantes);
       // Si hubo error lo mostramos; si salió bien, la action redirige.
       if (res?.error) setError(res.error);
@@ -383,11 +437,23 @@ export default function ProductForm({
       <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6">
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">
-            Stock por talle y color
+            {esEdicion ? "Corrección de stock" : "Stock inicial"}
           </h2>
           <p className="text-sm text-neutral-500">
-            Cargá cuántas unidades tenés de cada combinación. El total se calcula
-            solo. (Si agregás/quitás talles o colores, la grilla se actualiza.)
+            {esEdicion ? (
+              <>
+                El stock se mueve solo: <strong>suma</strong> con las compras y{" "}
+                <strong>resta</strong> con las ventas y las pérdidas. Tocá estos
+                números únicamente para corregir una diferencia con lo que
+                contaste en el depósito — queda registrada con su motivo.
+              </>
+            ) : (
+              <>
+                Cargá cuántas unidades tenés hoy de cada combinación. El total se
+                calcula solo. (Si agregás/quitás talles o colores, la grilla se
+                actualiza.)
+              </>
+            )}
           </p>
         </div>
 
@@ -396,22 +462,56 @@ export default function ProductForm({
             const k = keyVar(c.talle, c.color);
             const etiqueta =
               [c.talle, c.color].filter(Boolean).join(" · ") || "General";
+            const anterior = stockOriginal.get(k);
+            const esNueva = anterior === undefined;
+            const nuevo = Number(stockVar[k]) || 0;
+            const delta = esNueva ? 0 : nuevo - anterior;
+
             return (
               <div
                 key={k}
-                className="flex items-center justify-between gap-4 rounded-lg bg-neutral-50 px-4 py-2"
+                className={`flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-2 ${
+                  delta !== 0 ? "bg-amber-50" : "bg-neutral-50"
+                }`}
               >
-                <span className="text-sm text-neutral-700">{etiqueta}</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={stockVar[k] ?? ""}
-                  onChange={(e) =>
-                    setStockVar((prev) => ({ ...prev, [k]: e.target.value }))
-                  }
-                  className="w-28 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
-                  placeholder="0"
-                />
+                <span className="text-sm text-neutral-700">
+                  {etiqueta}
+                  {esEdicion && esNueva && (
+                    <span className="ml-2 rounded-full bg-neutral-200 px-2 py-0.5 text-xs text-neutral-600">
+                      combinación nueva
+                    </span>
+                  )}
+                </span>
+
+                <div className="flex items-center gap-3">
+                  {esEdicion && !esNueva && (
+                    <span className="text-xs text-neutral-500">
+                      en sistema: <strong>{anterior}</strong>
+                    </span>
+                  )}
+                  {delta !== 0 && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        delta > 0
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {delta > 0 ? `+${delta}` : delta}
+                    </span>
+                  )}
+                  <input
+                    type="number"
+                    min="0"
+                    value={stockVar[k] ?? ""}
+                    onChange={(e) =>
+                      setStockVar((prev) => ({ ...prev, [k]: e.target.value }))
+                    }
+                    className="w-28 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                    placeholder="0"
+                    aria-label={`Stock de ${etiqueta}`}
+                  />
+                </div>
               </div>
             );
           })}
@@ -421,6 +521,87 @@ export default function ProductForm({
           <span className="text-neutral-500">Stock total</span>
           <span className="font-semibold text-neutral-900">{totalStock} u.</span>
         </div>
+
+        {/* Motivo: obligatorio en cuanto un número cambió */}
+        {hayCorrecciones && (
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-900">
+              Vas a corregir{" "}
+              <strong>
+                {correcciones.length}{" "}
+                {correcciones.length === 1 ? "variante" : "variantes"}
+              </strong>
+              :{" "}
+              {correcciones
+                .map((c) => {
+                  const et =
+                    [c.talle, c.color].filter(Boolean).join(" · ") || "General";
+                  return `${et} ${c.anterior} → ${c.nuevo}`;
+                })
+                .join(", ")}
+              .
+            </p>
+            <div>
+              <label htmlFor="motivo" className={labelClase}>
+                Motivo de la corrección *
+              </label>
+              <textarea
+                id="motivo"
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                rows={2}
+                className={inputClase}
+                placeholder="Ej: conteo de depósito, se habían cargado mal 2 unidades, devolución de un cliente…"
+              />
+              <p className="mt-1 text-xs text-amber-800">
+                Queda guardado con tu usuario y la fecha, para saber después por
+                qué cambió el número.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Historial */}
+        {esEdicion && correccionesPrevias.length > 0 && (
+          <details className="border-t border-neutral-100 pt-3">
+            <summary className="cursor-pointer text-sm font-medium text-neutral-600">
+              Correcciones anteriores ({correccionesPrevias.length})
+            </summary>
+            <ul className="mt-3 space-y-2">
+              {correccionesPrevias.map((c) => {
+                const et =
+                  [c.talle, c.color].filter(Boolean).join(" · ") || "General";
+                return (
+                  <li
+                    key={c.id}
+                    className="rounded-lg bg-neutral-50 px-4 py-2 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-neutral-700">
+                        {et}: {c.stock_anterior} → {c.stock_nuevo}{" "}
+                        <span
+                          className={
+                            c.diferencia > 0
+                              ? "text-emerald-700"
+                              : "text-red-600"
+                          }
+                        >
+                          ({c.diferencia > 0 ? `+${c.diferencia}` : c.diferencia}
+                          )
+                        </span>
+                      </span>
+                      <span className="text-xs text-neutral-400">
+                        {formatFechaHora(c.created_at)}
+                        {c.usuario ? ` · ${c.usuario}` : ""}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-neutral-500">{c.motivo}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        )}
       </section>
 
       {/* Imágenes */}

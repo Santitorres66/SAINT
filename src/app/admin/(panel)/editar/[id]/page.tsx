@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductForm from "@/components/admin/ProductForm";
-import { getProductById, getProductVariantes } from "@/lib/products";
+import {
+  getProductById,
+  getProductVariantes,
+  getCorreccionesStock,
+} from "@/lib/products";
 import { createClient } from "@/lib/supabase/server";
 import type { Product } from "@/lib/types";
 
@@ -28,7 +32,10 @@ export default async function EditarProductoPage({
   const product = (data as Product) ?? (await getProductById(id));
   if (!product) notFound();
 
-  const variantes = await getProductVariantes(id);
+  const [variantes, correcciones] = await Promise.all([
+    getProductVariantes(id),
+    getCorreccionesStock(id),
+  ]);
 
   return (
     <div>
@@ -43,7 +50,11 @@ export default async function EditarProductoPage({
         Editar producto
       </h1>
 
-      <ProductForm initial={product} variantesIniciales={variantes} />
+      <ProductForm
+        initial={product}
+        variantesIniciales={variantes}
+        correccionesPrevias={correcciones}
+      />
     </div>
   );
 }

@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { ProductInput, ActionResult, VarianteInput } from "@/lib/types";
+import type {
+  ProductInput,
+  ActionResult,
+  VarianteInput,
+  CorreccionInput,
+} from "@/lib/types";
 
 /**
  * Server Actions del panel admin: crear, editar, borrar y activar/desactivar.
@@ -92,20 +97,35 @@ export async function createProduct(
   redirect("/admin/productos");
 }
 
-/** Edita un producto existente. */
+/**
+ * Edita un producto existente.
+ *
+ * Ojo con el stock: acá NO se pisa. El stock de una variante que ya existe se
+ * mueve solo por compras (suma), ventas y pérdidas (restan), o por una
+ * corrección explícita — que llega en `correcciones` y exige `motivo`.
+ * Guardar el formulario para cambiar el precio o una foto no puede alterar
+ * las cantidades del depósito.
+ */
 export async function updateProduct(
   id: string,
   input: ProductInput,
   variantes: VarianteInput[] = [],
+  correcciones: CorreccionInput[] = [],
+  motivo = "",
 ): Promise<ActionResult> {
   const problema = validar(input);
   if (problema) return { error: problema };
 
+  if (correcciones.length && !motivo.trim())
+    return {
+      error:
+        "Para corregir el stock hay que indicar el motivo (por qué no coincidía).",
+    };
+
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
 
-  const total = variantes.reduce((a, v) => a + (v.stock || 0), 0);
-
+  // `stock` no se toca: lo recalcula solo el trigger de product_variantes.
   const { error } = await supabase
     .from("products")
     .update({
@@ -117,24 +137,58 @@ export async function updateProduct(
       colores: input.colores ?? [],
       talles: input.talles ?? [],
       imagenes: input.imagenes ?? [],
-      stock: total,
       activo: input.activo,
     })
     .eq("id", id);
 
   if (error) return { error: `No se pudo guardar: ${error.message}` };
 
-  // Reemplazamos las variantes por las nuevas
-  await supabase.from("product_variantes").delete().eq("product_id", id);
-  if (variantes.length) {
+  /* --- Sincronizar qué combinaciones existen, sin tocar sus cantidades --- */
+  const { data: actuales } = await supabase
+    .from("product_variantes")
+    .select("id, talle, color")
+    .eq("product_id", id);
+
+  const clave = (t: string, c: string) => `${t}|||${c}`;
+  const deseadas = new Set(variantes.map((v) => clave(v.talle, v.color)));
+  const existentes = new Map(
+    ((actuales as { id: string; talle: string; color: string }[]) ?? []).map(
+      (v) => [clave(v.talle, v.color), v.id],
+    ),
+  );
+
+  // Combinaciones que se quitaron del producto (ya no se ofrece ese talle/color)
+  const aBorrar = [...existentes.entries()]
+    .filter(([k]) => !deseadas.has(k))
+    .map(([, vId]) => vId);
+  if (aBorrar.length)
+    await supabase.from("product_variantes").delete().in("id", aBorrar);
+
+  // Combinaciones nuevas: se crean con el stock que se cargó en el formulario
+  // (es carga inicial de esa variante, no una corrección).
+  const aCrear = variantes.filter((v) => !existentes.has(clave(v.talle, v.color)));
+  if (aCrear.length)
     await supabase.from("product_variantes").insert(
-      variantes.map((v) => ({
+      aCrear.map((v) => ({
         product_id: id,
         talle: v.talle,
         color: v.color,
         stock: v.stock,
       })),
     );
+
+  /* --- Correcciones manuales, con su motivo --- */
+  for (const c of correcciones) {
+    const { error: cErr } = await supabase.rpc("corregir_stock_variante", {
+      p_product_id: id,
+      p_talle: c.talle,
+      p_color: c.color,
+      p_stock_nuevo: c.stock_nuevo,
+      p_motivo: motivo.trim(),
+      p_usuario: user.email ?? "",
+    });
+    if (cErr)
+      return { error: `No se pudo corregir el stock: ${cErr.message}` };
   }
 
   revalidarPublico(id);

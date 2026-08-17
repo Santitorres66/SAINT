@@ -35,6 +35,32 @@ export interface ProductVariante {
 /** Datos de variante que manda el formulario. */
 export type VarianteInput = { talle: string; color: string; stock: number };
 
+/**
+ * Una corrección manual de stock. El stock se mueve solo con compras (suma),
+ * ventas y pérdidas (restan); cuando el número igual no coincide con lo que
+ * hay en el depósito, se corrige a mano y queda asentado acá con su motivo.
+ */
+export interface StockCorreccion {
+  id: string;
+  product_id: string;
+  talle: string;
+  color: string;
+  stock_anterior: number;
+  stock_nuevo: number;
+  /** Positiva si aparecieron unidades, negativa si faltaban. */
+  diferencia: number;
+  motivo: string;
+  usuario: string;
+  created_at: string;
+}
+
+/** Corrección que manda el formulario: el stock real contado de una variante. */
+export type CorreccionInput = {
+  talle: string;
+  color: string;
+  stock_nuevo: number;
+};
+
 /** Respuesta estándar de las server actions. */
 export type ActionResult = { error?: string; ok?: boolean };
 
