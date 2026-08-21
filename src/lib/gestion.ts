@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   Proveedor,
   Compra,
+  CompraItem,
   Cobro,
   VentaManual,
   VentaUnificada,
@@ -193,6 +194,42 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
 
 /* ------------------------------- Tablero --------------------------------- */
 
+/**
+ * Separa un conjunto de compras según para qué se compró. Hace falta porque
+ * mezclar una máquina bordadora con unos conos de hilo no dice nada: la
+ * primera es inversión y los segundos, gasto del mes.
+ *
+ * El desglose sale de los ítems (cada uno sabe su tipo); `total` es el de la
+ * compra, que es el número que se registró.
+ */
+function desglosarCompras(
+  filas: { total: number; items: CompraItem[] | null }[],
+) {
+  let total = 0;
+  let mercaderia = 0;
+  let insumos = 0;
+  let activos = 0;
+
+  for (const c of filas) {
+    total += Number(c.total) || 0;
+    for (const it of c.items ?? []) {
+      const monto = (Number(it.cantidad) || 0) * (Number(it.costo_unitario) || 0);
+      switch (it.tipo ?? "mercaderia") {
+        case "insumo":
+          insumos += monto;
+          break;
+        case "activo_fijo":
+          activos += monto;
+          break;
+        default:
+          mercaderia += monto;
+      }
+    }
+  }
+
+  return { total, mercaderia, insumos, activos };
+}
+
 /** Ventas (online aprobadas + manuales) para el análisis del tablero. */
 export async function getVentasParaAnalitica(): Promise<
   { fecha: string; total: number; cliente: string; canal: "online" | "manual" }[]
@@ -252,6 +289,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     { data: cobrosMes },
     { data: ventasPendientes },
     { data: ordenesVendidas },
+    { data: comprasTodas },
   ] = await Promise.all([
     supabase
       .from("orders")
@@ -262,7 +300,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .from("ventas")
       .select("id, total, items")
       .gte("fecha", inicioMes),
-    supabase.from("compras").select("total").gte("fecha", inicioMes),
+    supabase.from("compras").select("total, items").gte("fecha", inicioMes),
     supabase.from("products").select("id, nombre, costo, precio, stock, activo"),
     supabase
       .from("product_variantes")
@@ -280,6 +318,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .from("ordenes_produccion")
       .select("venta_id, costo_total")
       .not("venta_id", "is", null),
+    // Todas las compras: para el acumulado (incluye lo cargado como histórico)
+    supabase.from("compras").select("total, items"),
   ]);
 
   const prods =
@@ -302,9 +342,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     ventasMan.reduce((a, v) => a + Number(v.total), 0);
   const ventasMesCantidad = ventasOnline.length + ventasMan.length;
 
-  const comprasMesTotal = (
-    (comprasMes as { total: number }[]) ?? []
-  ).reduce((a, c) => a + Number(c.total), 0);
+  type FilaCompra = { total: number; items: CompraItem[] | null };
+  const compras = desglosarCompras((comprasMes as FilaCompra[]) ?? []);
+  const comprasHist = desglosarCompras((comprasTodas as FilaCompra[]) ?? []);
 
   /* --- Cobros --- */
   const cobradoMesTotal = ((cobrosMes as { monto: number }[]) ?? []).reduce(
@@ -367,7 +407,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     );
   }, 0);
 
-  const gananciaMesEstimada = gananciaOnline + gananciaManual;
+  const margenBrutoMes = gananciaOnline + gananciaManual;
+
+  // Lo que queda después de pagar los insumos del mes. Los activos fijos no
+  // entran: una máquina no se "gasta" en el mes en que se compró.
+  const resultadoMes = margenBrutoMes - compras.insumos;
 
   const stockBajo = (
     (variantesBajas as unknown as {
@@ -405,8 +449,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     cobradoMesTotal,
     pendienteCobroTotal,
     pendienteCobroCantidad,
-    comprasMesTotal,
-    gananciaMesEstimada,
+    comprasMesTotal: compras.total,
+    comprasMesMercaderia: compras.mercaderia,
+    comprasMesInsumos: compras.insumos,
+    comprasMesActivos: compras.activos,
+    comprasHistTotal: comprasHist.total,
+    comprasHistMercaderia: comprasHist.mercaderia,
+    comprasHistInsumos: comprasHist.insumos,
+    comprasHistActivos: comprasHist.activos,
+    margenBrutoMes,
+    resultadoMes,
     productosActivos: prods.filter((p) => p.activo).length,
     stockBajo,
     stockValorizadoCosto,

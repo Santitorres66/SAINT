@@ -401,8 +401,34 @@ export interface DashboardStats {
   pendienteCobroTotal: number;
   /** Cuántas ventas tienen saldo pendiente. */
   pendienteCobroCantidad: number;
+  /* --- Compras del mes, separadas por para qué se compró --- */
   comprasMesTotal: number;
-  gananciaMesEstimada: number;
+  /** Mercadería para revender: es el costo de lo que después se vende. */
+  comprasMesMercaderia: number;
+  /** Insumos (hilos, entretelas, bolsas): gasto del mes. */
+  comprasMesInsumos: number;
+  /** Maquinaria y herramientas: inversión, no gasto del mes. */
+  comprasMesActivos: number;
+
+  /* --- Compras de todos los tiempos (incluye la carga histórica) --- */
+  comprasHistTotal: number;
+  comprasHistMercaderia: number;
+  comprasHistInsumos: number;
+  comprasHistActivos: number;
+
+  /**
+   * Margen bruto del mes: lo vendido menos lo que costó esa mercadería
+   * (`products.costo`, o el costo real de producción si la venta cerró una
+   * orden de bordado). Todavía no descuenta los insumos.
+   */
+  margenBrutoMes: number;
+  /**
+   * Resultado del mes: margen bruto menos los insumos comprados en el mes.
+   * Los activos fijos quedan afuera a propósito: una máquina no es un gasto
+   * del mes en que se compró.
+   */
+  resultadoMes: number;
+
   productosActivos: number;
   stockBajo: {
     id: string;

@@ -59,6 +59,120 @@ export default async function TableroPage() {
         </Link>
       </div>
 
+      {/* Rentabilidad: de lo vendido al resultado, restando costo e insumos */}
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-900">
+          Rentabilidad de este mes
+        </h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Del precio de venta se descuenta el costo de la mercadería y después
+          los insumos que compraste.
+        </p>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+            <p className="text-sm text-neutral-500">Margen bruto</p>
+            <p className="mt-1 text-2xl font-semibold text-neutral-900">
+              {formatPrecio(stats.margenBrutoMes)}
+            </p>
+            <p className="mt-1 text-xs text-neutral-400">
+              lo vendido menos el costo de esa mercadería
+              {stats.ventasMesTotal > 0 && (
+                <>
+                  {" · "}
+                  {Math.round(
+                    (stats.margenBrutoMes / stats.ventasMesTotal) * 100,
+                  )}
+                  % de lo facturado
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+            <p className="text-sm text-neutral-500">Insumos del mes</p>
+            <p className="mt-1 text-2xl font-semibold text-neutral-900">
+              −{formatPrecio(stats.comprasMesInsumos)}
+            </p>
+            <p className="mt-1 text-xs text-neutral-400">
+              hilos, entretelas, bolsas, etiquetas…
+            </p>
+          </div>
+
+          <div
+            className={`rounded-2xl border p-5 ${
+              stats.resultadoMes >= 0
+                ? "border-emerald-200 bg-emerald-50"
+                : "border-red-200 bg-red-50"
+            }`}
+          >
+            <p className="text-sm text-neutral-600">Resultado del mes</p>
+            <p
+              className={`mt-1 text-2xl font-semibold ${
+                stats.resultadoMes >= 0 ? "text-emerald-700" : "text-red-700"
+              }`}
+            >
+              {formatPrecio(stats.resultadoMes)}
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              margen bruto menos insumos
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Compras: separadas por para qué se compró */}
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-900">Compras</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          La maquinaria va aparte: es una inversión, no un gasto del mes en que
+          la pagaste.
+        </p>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Link
+            href="/admin/compras"
+            className="rounded-2xl border border-neutral-200 bg-white p-5 transition hover:border-neutral-400 hover:shadow-sm"
+          >
+            <p className="text-sm text-neutral-500">Comprado este mes</p>
+            <p className="mt-1 text-2xl font-semibold text-neutral-900">
+              {formatPrecio(stats.comprasMesTotal)}
+            </p>
+            <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-xs">
+              <Fila
+                label="Mercadería para vender"
+                valor={stats.comprasMesMercaderia}
+              />
+              <Fila label="Insumos" valor={stats.comprasMesInsumos} />
+              <Fila
+                label="Maquinaria y herramientas"
+                valor={stats.comprasMesActivos}
+              />
+            </dl>
+          </Link>
+
+          <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+            <p className="text-sm text-neutral-500">
+              Comprado desde el inicio
+            </p>
+            <p className="mt-1 text-2xl font-semibold text-neutral-900">
+              {formatPrecio(stats.comprasHistTotal)}
+            </p>
+            <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-xs">
+              <Fila
+                label="Mercadería para vender"
+                valor={stats.comprasHistMercaderia}
+              />
+              <Fila label="Insumos" valor={stats.comprasHistInsumos} />
+              <Fila
+                label="Maquinaria y herramientas"
+                valor={stats.comprasHistActivos}
+              />
+            </dl>
+          </div>
+        </div>
+      </div>
+
       {/* Stock valorizado (capital) */}
       <div className="rounded-2xl border border-neutral-200 bg-gradient-to-br from-neutral-900 to-neutral-700 p-6 text-white">
         <p className="text-sm text-white/70">
@@ -146,6 +260,20 @@ export default async function TableroPage() {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Una línea del desglose de compras. */
+function Fila({ label, valor }: { label: string; valor: number }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-neutral-500">{label}</dt>
+      <dd
+        className={valor > 0 ? "font-medium text-neutral-800" : "text-neutral-300"}
+      >
+        {formatPrecio(valor)}
+      </dd>
     </div>
   );
 }
