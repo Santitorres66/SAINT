@@ -9,9 +9,33 @@ export const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: "gorra", label: "Gorras" },
 ];
 
+/** Categoría de los ítems que no se pueden clasificar. */
+export const CATEGORIA_OTROS = "otros";
+
 /** Devuelve la etiqueta legible de una categoría. */
 export function labelCategoria(value: string): string {
+  if (value === CATEGORIA_OTROS) return "Otros";
   return CATEGORIAS.find((c) => c.value === value)?.label ?? value;
+}
+
+/**
+ * A qué categoría pertenece un ítem vendido.
+ *
+ * Los ítems de una venta no guardan la categoría (vive en `products`), así que
+ * se resuelve por `product_id`. Las ventas manuales pueden tener ítems escritos
+ * a mano, sin producto: para esos se mira el nombre, y si no dice nada quedan
+ * en "Otros" antes que en una categoría equivocada.
+ */
+export function categoriaDeItem(
+  item: { product_id?: string | null; nombre?: string },
+  categoriaPorProducto: Record<string, string>,
+): string {
+  if (item.product_id && categoriaPorProducto[item.product_id])
+    return categoriaPorProducto[item.product_id];
+
+  const nombre = (item.nombre ?? "").toLowerCase();
+  const porNombre = CATEGORIAS.find((c) => nombre.includes(c.value));
+  return porNombre?.value ?? CATEGORIA_OTROS;
 }
 
 /** Talles sugeridos en el admin (se pueden agregar otros a mano). */

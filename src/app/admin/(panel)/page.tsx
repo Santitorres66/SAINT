@@ -1,13 +1,15 @@
 import Link from "next/link";
 import AnaliticaVentas from "@/components/admin/AnaliticaVentas";
 import { getDashboardStats, getVentasParaAnalitica } from "@/lib/gestion";
+import { getCategoriaPorProducto } from "@/lib/products";
 import { formatPrecio } from "@/lib/constants";
 
 /** TABLERO: analítica de ventas (con filtro de fecha) + stock y capital. */
 export default async function TableroPage() {
-  const [stats, ventas] = await Promise.all([
+  const [stats, ventas, categoriaPorProducto] = await Promise.all([
     getDashboardStats(),
     getVentasParaAnalitica(),
+    getCategoriaPorProducto(),
   ]);
 
   return (
@@ -20,7 +22,10 @@ export default async function TableroPage() {
       </div>
 
       {/* Analítica de ventas (KPIs + gráfico, con filtro de fecha) */}
-      <AnaliticaVentas ventas={ventas} />
+      <AnaliticaVentas
+        ventas={ventas}
+        categoriaPorProducto={categoriaPorProducto}
+      />
 
       {/* Cobranza: facturar no es cobrar. Estos números separan lo que
           vendiste de la plata que realmente entró. */}

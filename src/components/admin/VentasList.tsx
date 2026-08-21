@@ -4,7 +4,14 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { VentaUnificada } from "@/lib/types";
-import { formatPrecio, chipCobro, labelCobro, formatNumeroOrden } from "@/lib/constants";
+import {
+  formatPrecio,
+  chipCobro,
+  labelCobro,
+  formatNumeroOrden,
+  labelCategoria,
+  categoriaDeItem,
+} from "@/lib/constants";
 import { deleteVentaManual } from "@/app/admin/gestion-actions";
 import CobrosPanel from "@/components/admin/CobrosPanel";
 
@@ -23,10 +30,13 @@ type FiltroCobro = "todos" | "pendiente" | "cobrado";
 export default function VentasList({
   ventas,
   abrirCobroId,
+  categoriaPorProducto = {},
 }: {
   ventas: VentaUnificada[];
   /** Venta cuyo panel de cobros se abre al entrar (viene de ?cobrar=…). */
   abrirCobroId?: string;
+  /** `product_id → categoría`, para poder filtrar por rubro. */
+  categoriaPorProducto?: Record<string, string>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -34,6 +44,7 @@ export default function VentasList({
   const [error, setError] = useState<string | null>(null);
   const [canal, setCanal] = useState<FiltroCanal>("todas");
   const [cobro, setCobro] = useState<FiltroCobro>("todos");
+  const [categoria, setCategoria] = useState<string>("todas");
   const [cobrandoId, setCobrandoId] = useState<string | null>(
     abrirCobroId ?? null,
   );
@@ -48,13 +59,59 @@ export default function VentasList({
   const nManual = ventas.filter((v) => v.canal === "manual").length;
   const nPendientes = ventas.filter((v) => v.saldo > 0).length;
 
+  /* --- Filtro por rubro y totalizador ---
+     Cuando se filtra por categoría, lo que se totaliza son LOS ÍTEMS de esa
+     categoría, no el total de las ventas que la contienen: si una venta lleva
+     una gorra y un buzo, en "Gorras" solo tiene que pesar la gorra. */
+
+  /** Unidades y monto de una venta, contando solo la categoría pedida. */
+  function aporte(v: VentaUnificada, cat: string) {
+    let unidades = 0;
+    let monto = 0;
+    for (const it of v.items ?? []) {
+      if (cat !== "todas" && categoriaDeItem(it, categoriaPorProducto) !== cat)
+        continue;
+      unidades += Number(it.cantidad) || 0;
+      monto += (Number(it.cantidad) || 0) * (Number(it.precio_unitario) || 0);
+    }
+    return { unidades, monto };
+  }
+
+  // Rubros presentes en las ventas, con sus unidades (para los chips)
+  const unidadesPorCategoria = new Map<string, number>();
+  for (const v of ventas) {
+    for (const it of v.items ?? []) {
+      const c = categoriaDeItem(it, categoriaPorProducto);
+      unidadesPorCategoria.set(
+        c,
+        (unidadesPorCategoria.get(c) ?? 0) + (Number(it.cantidad) || 0),
+      );
+    }
+  }
+  const categoriasPresentes = [...unidadesPorCategoria.entries()].sort(
+    (a, b) => b[1] - a[1],
+  );
+
   const visibles = ventas
     .filter((v) => canal === "todas" || v.canal === canal)
     .filter((v) => {
       if (cobro === "todos") return true;
       if (cobro === "pendiente") return v.saldo > 0;
       return v.saldo <= 0;
-    });
+    })
+    .filter((v) => categoria === "todas" || aporte(v, categoria).unidades > 0);
+
+  // Totalizador de lo que se está viendo
+  const total = visibles.reduce(
+    (acc, v) => {
+      const a = aporte(v, categoria);
+      return {
+        unidades: acc.unidades + a.unidades,
+        monto: acc.monto + a.monto,
+      };
+    },
+    { unidades: 0, monto: 0 },
+  );
 
   function confirmarBorrado() {
     if (!aBorrar) return;
@@ -136,6 +193,59 @@ export default function VentasList({
             {label}
           </button>
         ))}
+      </div>
+
+      {/* Filtro por rubro: qué se vendió */}
+      {categoriasPresentes.length > 1 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            onClick={() => setCategoria("todas")}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+              categoria === "todas"
+                ? "border-neutral-700 bg-neutral-100 text-neutral-900"
+                : "border-neutral-200 text-neutral-500 hover:bg-neutral-50"
+            }`}
+          >
+            Todos los productos
+          </button>
+          {categoriasPresentes.map(([cat, unidades]) => (
+            <button
+              key={cat}
+              onClick={() => setCategoria(cat)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                categoria === cat
+                  ? "border-neutral-700 bg-neutral-100 text-neutral-900"
+                  : "border-neutral-200 text-neutral-500 hover:bg-neutral-50"
+              }`}
+            >
+              {labelCategoria(cat)} ({unidades} u.)
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Totalizador de lo que se está viendo */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-5 py-3">
+        <p className="text-sm text-neutral-600">
+          {visibles.length} {visibles.length === 1 ? "venta" : "ventas"}
+          {categoria !== "todas" && (
+            <> con {labelCategoria(categoria).toLowerCase()}</>
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-6">
+          <p className="text-sm text-neutral-600">
+            Unidades{" "}
+            <strong className="text-base text-neutral-900">
+              {total.unidades}
+            </strong>
+          </p>
+          <p className="text-sm text-neutral-600">
+            {categoria === "todas" ? "Monto" : "Monto del rubro"}{" "}
+            <strong className="text-base text-neutral-900">
+              {formatPrecio(total.monto)}
+            </strong>
+          </p>
+        </div>
       </div>
 
       {visibles.length === 0 ? (

@@ -68,6 +68,26 @@ export async function getProductVariantes(
   return (data as ProductVariante[]) ?? [];
 }
 
+/**
+ * Mapa `product_id → categoría`, para poder saber de qué rubro fue cada ítem
+ * vendido (las ventas guardan el nombre y el precio, no la categoría).
+ */
+export async function getCategoriaPorProducto(): Promise<
+  Record<string, string>
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("products").select("id, categoria");
+  if (error) {
+    console.warn("getCategoriaPorProducto:", error.message);
+    return {};
+  }
+  const mapa: Record<string, string> = {};
+  for (const p of (data as { id: string; categoria: string }[]) ?? []) {
+    mapa[p.id] = p.categoria;
+  }
+  return mapa;
+}
+
 /** Últimas correcciones manuales de stock de un producto (más nueva primero). */
 export async function getCorreccionesStock(
   productId: string,

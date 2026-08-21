@@ -1,6 +1,7 @@
 import Link from "next/link";
 import VentasList from "@/components/admin/VentasList";
 import { getVentasUnificadas } from "@/lib/gestion";
+import { getCategoriaPorProducto } from "@/lib/products";
 import { formatPrecio } from "@/lib/constants";
 
 /** Listado de ventas: online (Mercado Pago) + manuales, con su cobro. */
@@ -10,8 +11,9 @@ export default async function VentasPage({
   /** ?cobrar=<id> abre directo el panel de cobros de esa venta. */
   searchParams: Promise<{ cobrar?: string }>;
 }) {
-  const [ventas, { cobrar }] = await Promise.all([
+  const [ventas, categoriaPorProducto, { cobrar }] = await Promise.all([
     getVentasUnificadas(),
+    getCategoriaPorProducto(),
     searchParams,
   ]);
 
@@ -45,7 +47,11 @@ export default async function VentasPage({
         <Resumen titulo="Pendiente de cobro" valor={pendiente} tono="ambar" />
       </div>
 
-      <VentasList ventas={ventas} abrirCobroId={cobrar} />
+      <VentasList
+        ventas={ventas}
+        abrirCobroId={cobrar}
+        categoriaPorProducto={categoriaPorProducto}
+      />
     </div>
   );
 }

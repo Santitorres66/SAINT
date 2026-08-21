@@ -1,13 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatPrecio } from "@/lib/constants";
+import type { OrderItem } from "@/lib/types";
+import {
+  formatPrecio,
+  labelCategoria,
+  categoriaDeItem,
+} from "@/lib/constants";
 
 type Venta = {
   fecha: string;
   total: number;
   cliente: string;
   canal: "online" | "manual";
+  items: OrderItem[];
 };
 type Preset = "mes" | "anio" | "12m" | "todo" | "custom";
 
@@ -27,7 +33,14 @@ function compacto(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-export default function AnaliticaVentas({ ventas }: { ventas: Venta[] }) {
+export default function AnaliticaVentas({
+  ventas,
+  categoriaPorProducto = {},
+}: {
+  ventas: Venta[];
+  /** `product_id → categoría`, para desglosar qué se vendió. */
+  categoriaPorProducto?: Record<string, string>;
+}) {
   const [preset, setPreset] = useState<Preset>("mes");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
@@ -67,6 +80,39 @@ export default function AnaliticaVentas({ ventas }: { ventas: Venta[] }) {
       clientes,
     };
   }, [ventas, ini, fin]);
+
+  /* Qué se vendió en el período, por rubro: unidades y monto.
+     El monto es el de los ítems de cada rubro, no el de la venta entera. */
+  const porRubro = useMemo(() => {
+    const acc = new Map<string, { unidades: number; monto: number }>();
+    let unidadesTotal = 0;
+    let montoTotal = 0;
+
+    for (const v of ventas) {
+      const d = new Date(v.fecha);
+      if (d < ini || d > fin) continue;
+      for (const it of v.items ?? []) {
+        const cat = categoriaDeItem(it, categoriaPorProducto);
+        const unidades = Number(it.cantidad) || 0;
+        const monto = unidades * (Number(it.precio_unitario) || 0);
+        const prev = acc.get(cat) ?? { unidades: 0, monto: 0 };
+        acc.set(cat, {
+          unidades: prev.unidades + unidades,
+          monto: prev.monto + monto,
+        });
+        unidadesTotal += unidades;
+        montoTotal += monto;
+      }
+    }
+
+    return {
+      filas: [...acc.entries()]
+        .map(([categoria, v]) => ({ categoria, ...v }))
+        .sort((a, b) => b.monto - a.monto),
+      unidadesTotal,
+      montoTotal,
+    };
+  }, [ventas, ini, fin, categoriaPorProducto]);
 
   // Desglose por canal del período (para el gráfico de torta)
   const porCanal = useMemo(() => {
@@ -226,6 +272,60 @@ export default function AnaliticaVentas({ ventas }: { ventas: Venta[] }) {
         <p className="mt-3 text-right text-xs text-neutral-400">
           Máximo del período: {compacto(maxMes)}
         </p>
+      </div>
+
+      {/* Qué se vendió, por rubro. Mismo período que los KPIs. */}
+      <div className="rounded-2xl border border-neutral-200 bg-white p-6">
+        <div className="mb-1 flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold text-neutral-900">
+            Qué se vendió
+          </h2>
+          <p className="text-xs text-neutral-400">
+            {porRubro.unidadesTotal} u. · {formatPrecio(porRubro.montoTotal)}
+          </p>
+        </div>
+        <p className="mb-4 text-xs text-neutral-400">
+          Unidades y monto por rubro. El monto es el de las prendas de cada
+          rubro, no el de la venta completa.
+        </p>
+
+        {porRubro.filas.length === 0 ? (
+          <p className="py-8 text-center text-sm text-neutral-400">
+            No hay ventas en el período elegido.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {porRubro.filas.map((f) => {
+              const pct = porRubro.montoTotal
+                ? (f.monto / porRubro.montoTotal) * 100
+                : 0;
+              return (
+                <li key={f.categoria}>
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="font-medium text-neutral-800">
+                      {labelCategoria(f.categoria)}
+                    </span>
+                    <span className="text-neutral-500">
+                      <strong className="text-neutral-900">
+                        {f.unidades} u.
+                      </strong>{" "}
+                      · {formatPrecio(f.monto)}{" "}
+                      <span className="text-neutral-400">
+                        ({Math.round(pct)}%)
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-neutral-100">
+                    <div
+                      className="h-full rounded-full bg-neutral-800"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {/* Gráfico de torta: ventas por canal, mismo período que los KPIs */}

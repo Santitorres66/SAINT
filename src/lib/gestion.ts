@@ -230,18 +230,27 @@ function desglosarCompras(
   return { total, mercaderia, insumos, activos };
 }
 
-/** Ventas (online aprobadas + manuales) para el análisis del tablero. */
+/**
+ * Ventas (online aprobadas + manuales) para el análisis del tablero.
+ * Trae los ítems para poder desglosar por rubro (qué se vendió, no solo cuánto).
+ */
 export async function getVentasParaAnalitica(): Promise<
-  { fecha: string; total: number; cliente: string; canal: "online" | "manual" }[]
+  {
+    fecha: string;
+    total: number;
+    cliente: string;
+    canal: "online" | "manual";
+    items: OrderItem[];
+  }[]
 > {
   const supabase = await createClient();
   const [{ data: orders, error: errOrders }, { data: manuales, error: errVentas }] =
     await Promise.all([
       supabase
         .from("orders")
-        .select("created_at, total, comprador")
+        .select("created_at, total, comprador, items")
         .eq("status", "approved"),
-      supabase.from("ventas").select("fecha, total, cliente"),
+      supabase.from("ventas").select("fecha, total, cliente, items"),
     ]);
   if (errOrders) console.warn("getVentasParaAnalitica (orders):", errOrders.message);
   if (errVentas) console.warn("getVentasParaAnalitica (ventas):", errVentas.message);
@@ -251,21 +260,29 @@ export async function getVentasParaAnalitica(): Promise<
       created_at: string;
       total: number;
       comprador: { nombre?: string; email?: string } | null;
+      items: OrderItem[] | null;
     }[]) ?? []
   ).map((o) => ({
     fecha: o.created_at,
     total: Number(o.total),
     cliente: o.comprador?.email || o.comprador?.nombre || "Cliente web",
     canal: "online" as const,
+    items: o.items ?? [],
   }));
 
   const man = (
-    (manuales as { fecha: string; total: number; cliente: string }[]) ?? []
+    (manuales as {
+      fecha: string;
+      total: number;
+      cliente: string;
+      items: OrderItem[] | null;
+    }[]) ?? []
   ).map((v) => ({
     fecha: v.fecha,
     total: Number(v.total),
     cliente: v.cliente || "",
     canal: "manual" as const,
+    items: v.items ?? [],
   }));
 
   return [...online, ...man];
