@@ -104,6 +104,8 @@ export function labelEstado(value: string): string {
 export const COLUMNAS_PRODUCCION: {
   id: string;
   label: string;
+  /** Versión corta para el selector de la tarjeta, donde sobra poco ancho. */
+  labelCorto?: string;
   estados: EstadoProduccion[];
   destino: EstadoProduccion;
   col: string;
@@ -136,6 +138,7 @@ export const COLUMNAS_PRODUCCION: {
   {
     id: "entregado",
     label: "Entregado / Vendido",
+    labelCorto: "Entreg./Vend.",
     estados: ["entregado", "vendido"],
     // Al soltar acá la orden queda "entregado": "vendido" se gana cargando la
     // venta, no arrastrando la tarjeta.

@@ -181,22 +181,26 @@ function Tarjeta({
       )}
 
       <div className="mt-2 flex items-center gap-2">
-        {/* Fallback sin arrastrar (ideal en celular) */}
+        {/* Fallback sin arrastrar (ideal en celular).
+            `min-w-0` es lo que le permite encogerse: sin eso, un select no baja
+            del ancho de su opción más larga y empuja el "Ver" fuera de la
+            tarjeta. */}
         <select
           value={columnaDeEstado(orden.estado).id}
           disabled={pending}
           onChange={(e) => onMover(orden.id, e.target.value)}
-          className="flex-1 rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs outline-none focus:border-neutral-900 disabled:opacity-50"
+          aria-label="Cambiar estado de la orden"
+          className="min-w-0 flex-1 truncate rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs outline-none focus:border-neutral-900 disabled:opacity-50"
         >
           {COLUMNAS_PRODUCCION.map((c) => (
             <option key={c.id} value={c.id}>
-              Mover a: {c.label}
+              {c.labelCorto ?? c.label}
             </option>
           ))}
         </select>
         <Link
           href={`/admin/produccion/${orden.id}`}
-          className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100"
+          className="shrink-0 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100"
         >
           Ver
         </Link>
