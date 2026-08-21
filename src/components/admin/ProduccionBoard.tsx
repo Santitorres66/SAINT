@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -262,6 +262,27 @@ export default function ProduccionBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
+  /* --- Barra de scroll espejo, arriba del tablero ---
+     El tablero es alto: para correrlo al costado había que bajar hasta el
+     final a buscar la barra. Esta es una segunda barra arriba, sincronizada
+     con la de abajo en los dos sentidos. */
+  const barraRef = useRef<HTMLDivElement>(null);
+  const tableroRef = useRef<HTMLDivElement>(null);
+  const [medidas, setMedidas] = useState({ scroll: 0, visible: 0 });
+  // Evita el rebote entre los dos onScroll (uno mueve al otro y vuelve).
+  const sincronizando = useRef(false);
+
+  function espejar(desde: HTMLDivElement | null, hacia: HTMLDivElement | null) {
+    if (!desde || !hacia || sincronizando.current) return;
+    sincronizando.current = true;
+    hacia.scrollLeft = desde.scrollLeft;
+    requestAnimationFrame(() => {
+      sincronizando.current = false;
+    });
+  }
+
+  const hayQueScrollear = medidas.scroll > medidas.visible + 1;
+
   function mover(id: string, estado: EstadoProduccion) {
     const actual = local.find((o) => o.id === id);
     if (!actual || actual.estado === estado) return;
@@ -343,6 +364,19 @@ export default function ProduccionBoard({
       .includes(t);
   });
 
+  // Medimos el tablero para saber cuánto tiene que "durar" la barra de arriba.
+  // Se remide cuando cambian las tarjetas visibles y cuando cambia la ventana.
+  useEffect(() => {
+    const el = tableroRef.current;
+    if (!el) return;
+    const medir = () =>
+      setMedidas({ scroll: el.scrollWidth, visible: el.clientWidth });
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [filtradas.length]);
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -382,8 +416,25 @@ export default function ProduccionBoard({
         venta. “Cobrado” se completa al registrar el cobro.
       </p>
 
+      {/* Barra de scroll de arriba: solo si el tablero no entra en pantalla.
+          Es un duplicado de la de abajo, así que no la anunciamos. */}
+      {hayQueScrollear && (
+        <div
+          ref={barraRef}
+          onScroll={() => espejar(barraRef.current, tableroRef.current)}
+          aria-hidden
+          className="overflow-x-auto"
+        >
+          <div style={{ width: medidas.scroll, height: 1 }} />
+        </div>
+      )}
+
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-3">
+        <div
+          ref={tableroRef}
+          onScroll={() => espejar(tableroRef.current, barraRef.current)}
+          className="flex gap-4 overflow-x-auto pb-3"
+        >
           {COLUMNAS_PRODUCCION.map((columna) => {
             const items = filtradas.filter((o) =>
               (columna.estados as string[]).includes(o.estado),
