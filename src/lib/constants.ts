@@ -1,4 +1,4 @@
-import type { Categoria } from "./types";
+import type { Categoria, EstadoProduccion } from "./types";
 
 /** Categorías con etiqueta legible (para selects y filtros). */
 export const CATEGORIAS: { value: Categoria; label: string }[] = [
@@ -88,6 +88,78 @@ export const ESTADOS_PRODUCCION = [
 
 export function labelEstado(value: string): string {
   return ESTADOS_PRODUCCION.find((e) => e.value === value)?.label ?? value;
+}
+
+/**
+ * Columnas del Kanban de producción.
+ *
+ * No son uno a uno con los estados: "Entregado" y "Vendido" comparten columna
+ * para que el tablero entre en pantalla sin scrollear al costado. En la base
+ * siguen siendo estados distintos —"vendido" lo produce la venta y de ahí sale
+ * el circuito de cobro—, así que la tarjeta aclara en cuál está.
+ *
+ * `estados` son los que caen en la columna; `destino` es a cuál se pasa la
+ * orden cuando se la suelta ahí.
+ */
+export const COLUMNAS_PRODUCCION: {
+  id: string;
+  label: string;
+  estados: EstadoProduccion[];
+  destino: EstadoProduccion;
+  col: string;
+  chip: string;
+}[] = [
+  {
+    id: "pendiente",
+    label: "Pendiente",
+    estados: ["pendiente"],
+    destino: "pendiente",
+    col: "bg-amber-50 border-amber-200",
+    chip: "bg-amber-100 text-amber-800",
+  },
+  {
+    id: "en_produccion",
+    label: "En producción",
+    estados: ["en_produccion"],
+    destino: "en_produccion",
+    col: "bg-blue-50 border-blue-200",
+    chip: "bg-blue-100 text-blue-800",
+  },
+  {
+    id: "fabricado",
+    label: "Fabricado",
+    estados: ["fabricado"],
+    destino: "fabricado",
+    col: "bg-green-50 border-green-200",
+    chip: "bg-green-100 text-green-800",
+  },
+  {
+    id: "entregado",
+    label: "Entregado / Vendido",
+    estados: ["entregado", "vendido"],
+    // Al soltar acá la orden queda "entregado": "vendido" se gana cargando la
+    // venta, no arrastrando la tarjeta.
+    destino: "entregado",
+    col: "bg-neutral-100 border-neutral-200",
+    chip: "bg-neutral-200 text-neutral-700",
+  },
+  {
+    id: "cobrado",
+    label: "Cobrado",
+    estados: ["cobrado"],
+    destino: "cobrado",
+    col: "bg-emerald-50 border-emerald-200",
+    chip: "bg-emerald-100 text-emerald-800",
+  },
+];
+
+/** La columna del tablero donde cae una orden según su estado. */
+export function columnaDeEstado(estado: string) {
+  return (
+    COLUMNAS_PRODUCCION.find((c) =>
+      (c.estados as string[]).includes(estado),
+    ) ?? COLUMNAS_PRODUCCION[0]
+  );
 }
 
 /**

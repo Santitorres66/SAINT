@@ -14,10 +14,12 @@ import {
 } from "@dnd-kit/core";
 import type { OrdenProduccionVista, EstadoProduccion } from "@/lib/types";
 import {
-  ESTADOS_PRODUCCION,
+  COLUMNAS_PRODUCCION,
   PRIORIDADES_PRODUCCION,
   chipCobro,
   labelCobro,
+  labelEstado,
+  columnaDeEstado,
   estaAtrasada,
   formatNumeroOrden,
   formatPrecio,
@@ -37,7 +39,8 @@ function Tarjeta({
   pending,
 }: {
   orden: OrdenProduccionVista;
-  onMover: (id: string, e: EstadoProduccion) => void;
+  /** Mueve la orden a una columna del tablero (por id de columna). */
+  onMover: (id: string, columnaId: string) => void;
   pending: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -146,6 +149,19 @@ function Tarjeta({
         </div>
       )}
 
+      {/* La columna agrupa varios estados: acá se aclara en cuál está. */}
+      {columnaDeEstado(orden.estado).estados.length > 1 && (
+        <span
+          className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            orden.venta_id
+              ? "bg-purple-100 text-purple-800"
+              : "bg-neutral-200 text-neutral-700"
+          }`}
+        >
+          {labelEstado(orden.estado)}
+        </span>
+      )}
+
       {/* Cierre del circuito: vender lo entregado, cobrar lo vendido */}
       {orden.estado === "entregado" && !orden.venta_id && (
         <Link
@@ -167,14 +183,14 @@ function Tarjeta({
       <div className="mt-2 flex items-center gap-2">
         {/* Fallback sin arrastrar (ideal en celular) */}
         <select
-          value={orden.estado}
+          value={columnaDeEstado(orden.estado).id}
           disabled={pending}
-          onChange={(e) => onMover(orden.id, e.target.value as EstadoProduccion)}
+          onChange={(e) => onMover(orden.id, e.target.value)}
           className="flex-1 rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-xs outline-none focus:border-neutral-900 disabled:opacity-50"
         >
-          {ESTADOS_PRODUCCION.map((e) => (
-            <option key={e.value} value={e.value}>
-              Mover a: {e.label}
+          {COLUMNAS_PRODUCCION.map((c) => (
+            <option key={c.id} value={c.id}>
+              Mover a: {c.label}
             </option>
           ))}
         </select>
@@ -191,29 +207,29 @@ function Tarjeta({
 
 /* ------------------------------- Columna -------------------------------- */
 function Columna({
-  estado,
+  columna,
   children,
   count,
 }: {
-  estado: (typeof ESTADOS_PRODUCCION)[number];
+  columna: (typeof COLUMNAS_PRODUCCION)[number];
   children: React.ReactNode;
   count: number;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: estado.value });
+  const { setNodeRef, isOver } = useDroppable({ id: columna.id });
   return (
     <div
       ref={setNodeRef}
-      // Ancho fijo + scroll horizontal en el contenedor: con 6 estados, una
-      // grilla que reparte el ancho dejaría las tarjetas ilegibles.
-      className={`w-[275px] shrink-0 rounded-2xl border ${estado.col} p-3 transition ${
+      // Ancho fijo + scroll horizontal en el contenedor: una grilla que
+      // reparta el ancho dejaría las tarjetas ilegibles.
+      className={`w-[275px] shrink-0 rounded-2xl border ${columna.col} p-3 transition ${
         isOver ? "ring-2 ring-neutral-900/30" : ""
       }`}
     >
       <div className="mb-3 flex items-center justify-between px-1">
         <span className="text-sm font-semibold text-neutral-800">
-          {estado.label}
+          {columna.label}
         </span>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${estado.chip}`}>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${columna.chip}`}>
           {count}
         </span>
       </div>
@@ -276,10 +292,24 @@ export default function ProduccionBoard({
     });
   }
 
+  /**
+   * Mueve una orden a la columna indicada. Como una columna puede agrupar más
+   * de un estado ("Entregado / Vendido"), si la orden ya está en esa columna no
+   * hacemos nada: soltar una orden vendida en su propia columna no la puede
+   * degradar a "entregado".
+   */
+  function moverAColumna(id: string, columnaId: string) {
+    const columna = COLUMNAS_PRODUCCION.find((c) => c.id === columnaId);
+    if (!columna) return;
+    const actual = local.find((o) => o.id === id);
+    if (actual && (columna.estados as string[]).includes(actual.estado)) return;
+    mover(id, columna.destino);
+  }
+
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     if (!over) return;
-    mover(String(active.id), over.id as EstadoProduccion);
+    moverAColumna(String(active.id), String(over.id));
   }
 
   // Matrices presentes (para el filtro)
@@ -343,21 +373,24 @@ export default function ProduccionBoard({
 
       <p className="text-xs text-neutral-400">
         Arrastrá las tarjetas entre columnas para cambiar el estado (o usá el
-        selector de cada tarjeta). Las dos últimas columnas se completan solas:
-        “Vendido” al cargar la venta y “Cobrado” al registrar el cobro.
+        selector de cada tarjeta). “Entregado” y “Vendido” comparten columna: la
+        tarjeta aclara en cuál está y pasa a <em>Vendido</em> sola al cargar la
+        venta. “Cobrado” se completa al registrar el cobro.
       </p>
 
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="flex gap-4 overflow-x-auto pb-3">
-          {ESTADOS_PRODUCCION.map((estado) => {
-            const items = filtradas.filter((o) => o.estado === estado.value);
+          {COLUMNAS_PRODUCCION.map((columna) => {
+            const items = filtradas.filter((o) =>
+              (columna.estados as string[]).includes(o.estado),
+            );
             return (
-              <Columna key={estado.value} estado={estado} count={items.length}>
+              <Columna key={columna.id} columna={columna} count={items.length}>
                 {items.map((o) => (
                   <Tarjeta
                     key={o.id}
                     orden={o}
-                    onMover={mover}
+                    onMover={moverAColumna}
                     pending={pending}
                   />
                 ))}
