@@ -7,12 +7,16 @@ import type {
   Product,
   ProductInput,
   Categoria,
+  Molde,
   ProductVariante,
   VarianteInput,
   StockCorreccion,
 } from "@/lib/types";
 import {
   CATEGORIAS,
+  CATEGORIAS_CON_MOLDE,
+  MOLDES,
+  MOLDE_POR_DEFECTO,
   TALLES_SUGERIDOS,
   COLORES_SUGERIDOS,
 } from "@/lib/constants";
@@ -57,6 +61,12 @@ export default function ProductForm({
   const [categoria, setCategoria] = useState<Categoria>(
     initial?.categoria ?? "buzo",
   );
+  const [molde, setMolde] = useState<Molde>(
+    initial?.molde ?? MOLDE_POR_DEFECTO,
+  );
+  // Sólo algunas categorías vienen en más de un molde; en el resto el selector
+  // no se muestra y el valor queda en el molde por defecto.
+  const eligeMolde = CATEGORIAS_CON_MOLDE.includes(categoria);
   const [precio, setPrecio] = useState(String(initial?.precio ?? ""));
   const [costo, setCosto] = useState(String(initial?.costo ?? ""));
   // Stock por variante (talle + color). Clave: `${talle}|||${color}`
@@ -152,6 +162,7 @@ export default function ProductForm({
     const input: ProductInput = {
       nombre,
       categoria,
+      molde: eligeMolde ? molde : MOLDE_POR_DEFECTO,
       precio: Number(precio),
       costo: Number(costo) || 0,
       stock: totalStock,
@@ -229,6 +240,29 @@ export default function ProductForm({
             ))}
           </select>
         </div>
+
+        {eligeMolde && (
+          <div>
+            <label htmlFor="molde" className={labelClase}>
+              Molde *
+            </label>
+            <select
+              id="molde"
+              value={molde}
+              onChange={(e) => setMolde(e.target.value as Molde)}
+              className={inputClase}
+            >
+              {MOLDES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-sm text-neutral-500">
+              Define qué tabla de talles ve el cliente en la web.
+            </p>
+          </div>
+        )}
 
         <div className="grid gap-6 sm:grid-cols-2">
           <div>

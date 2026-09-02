@@ -1,4 +1,4 @@
-import type { Categoria, EstadoProduccion } from "./types";
+import type { Categoria, EstadoProduccion, Molde } from "./types";
 
 /** Categorías con etiqueta legible (para selects y filtros). */
 export const CATEGORIAS: { value: Categoria; label: string }[] = [
@@ -8,6 +8,26 @@ export const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: "canguro", label: "Canguros" },
   { value: "gorra", label: "Gorras" },
 ];
+
+/** Moldes con etiqueta legible (para el select del admin). */
+export const MOLDES: { value: Molde; label: string }[] = [
+  { value: "oversize", label: "Oversize" },
+  { value: "basica", label: "Básica" },
+];
+
+/** El molde de lo que ya estaba cargado antes de que existiera el campo. */
+export const MOLDE_POR_DEFECTO: Molde = "oversize";
+
+/**
+ * Categorías donde el molde cambia las medidas y hay que elegirlo. En el resto
+ * (buzos, canguros, gorras) hay un solo molde, así que el selector no aparece.
+ */
+export const CATEGORIAS_CON_MOLDE: string[] = ["remera", "crop"];
+
+/** Devuelve la etiqueta legible de un molde. */
+export function labelMolde(value: string): string {
+  return MOLDES.find((m) => m.value === value)?.label ?? value;
+}
 
 /** Categoría de los ítems que no se pueden clasificar. */
 export const CATEGORIA_OTROS = "otros";
@@ -267,8 +287,13 @@ export function formatNumeroOrden(n: number): string {
 type FilaTalle = { talle: string; ancho: string; largo: string };
 type TablaTalles = { titulo: string; filas: FilaTalle[] };
 
+/**
+ * Las medidas de la prenda, por familia y molde. La clave es
+ * `${familia}_${molde}`: dos prendas de la misma familia calzan distinto según
+ * el molde, y por eso la remera básica tiene su propia tabla.
+ */
 export const TABLAS_TALLES: Record<string, TablaTalles> = {
-  remera: {
+  remera_oversize: {
     titulo: "Remera Oversize",
     filas: [
       { talle: "S", ancho: "57 cm", largo: "78 cm" },
@@ -277,7 +302,20 @@ export const TABLAS_TALLES: Record<string, TablaTalles> = {
       { talle: "XL", ancho: "65 cm", largo: "84 cm" },
     ],
   },
-  buzo: {
+  remera_basica: {
+    titulo: "Remera Básica",
+    filas: [
+      { talle: "12", ancho: "41 cm", largo: "53 cm" },
+      { talle: "14", ancho: "43 cm", largo: "55 cm" },
+      { talle: "16", ancho: "45 cm", largo: "57 cm" },
+      { talle: "18", ancho: "47 cm", largo: "59 cm" },
+      { talle: "S", ancho: "54 cm", largo: "69 cm" },
+      { talle: "M", ancho: "56 cm", largo: "73 cm" },
+      { talle: "L", ancho: "59 cm", largo: "76 cm" },
+      { talle: "XL", ancho: "62 cm", largo: "79 cm" },
+    ],
+  },
+  buzo_oversize: {
     titulo: "Buzo Oversize",
     filas: [
       { talle: "S", ancho: "64 cm", largo: "73 cm" },
@@ -288,16 +326,32 @@ export const TABLAS_TALLES: Record<string, TablaTalles> = {
   },
 };
 
-/** Devuelve la tabla de talles que corresponde a una categoría. */
-export function tablaTallesDe(categoria: string): TablaTalles | null {
-  const mapa: Record<string, keyof typeof TABLAS_TALLES> = {
-    remera: "remera",
-    crop: "remera",
-    buzo: "buzo",
-    canguro: "buzo",
-  };
-  const key = mapa[categoria];
-  return key ? TABLAS_TALLES[key] : null;
+/** Qué tabla comparten las categorías: los crops usan la de remera, los
+ *  canguros la de buzo. Las gorras no llevan tabla (no están acá). */
+const FAMILIA_DE_CATEGORIA: Record<string, string> = {
+  remera: "remera",
+  crop: "remera",
+  buzo: "buzo",
+  canguro: "buzo",
+};
+
+/**
+ * Devuelve la tabla de talles de un producto según su categoría y su molde.
+ *
+ * Si esa familia no tiene tabla para el molde pedido (hoy: un buzo marcado como
+ * básico) cae en la del molde por defecto antes que no mostrar nada.
+ */
+export function tablaTallesDe(
+  categoria: string,
+  molde: string = MOLDE_POR_DEFECTO,
+): TablaTalles | null {
+  const familia = FAMILIA_DE_CATEGORIA[categoria];
+  if (!familia) return null;
+  return (
+    TABLAS_TALLES[`${familia}_${molde}`] ??
+    TABLAS_TALLES[`${familia}_${MOLDE_POR_DEFECTO}`] ??
+    null
+  );
 }
 
 /** Formatea un precio en pesos argentinos (sin centavos). */

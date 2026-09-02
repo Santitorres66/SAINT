@@ -1,11 +1,19 @@
 /** Categorías válidas — coinciden con el CHECK de la tabla en Supabase. */
 export type Categoria = "buzo" | "remera" | "gorra" | "canguro" | "crop";
 
+/**
+ * Molde de la prenda. La categoría no alcanza para saber cómo calza: una remera
+ * oversize y una básica son las dos `categoria = "remera"` pero tienen tablas de
+ * talles distintas. Coincide con el CHECK de la tabla en Supabase.
+ */
+export type Molde = "oversize" | "basica";
+
 /** Un producto tal como vive en la tabla `products`. */
 export interface Product {
   id: string;
   nombre: string;
   categoria: Categoria;
+  molde: Molde;
   precio: number;
   costo: number; // precio de costo (para calcular ganancia)
   descripcion: string;

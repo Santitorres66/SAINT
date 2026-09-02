@@ -142,7 +142,7 @@ export default function ProductPurchasePanel({
             <p className="text-xs uppercase tracking-wide2 text-saint-gray">
               Talle
             </p>
-            <SizeChart categoria={product.categoria} />
+            <SizeChart categoria={product.categoria} molde={product.molde} />
           </div>
           <div className="flex flex-wrap gap-2">
             {product.talles.map((t) => {

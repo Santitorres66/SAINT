@@ -1,14 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { tablaTallesDe } from "@/lib/constants";
+import { MOLDE_POR_DEFECTO, tablaTallesDe } from "@/lib/constants";
 
 /**
  * Tabla de talles del producto (medidas de la prenda), en un modal elegante
- * acorde a la estética SAINT. Se muestra según la categoría.
+ * acorde a la estética SAINT. Se muestra según la categoría y el molde: una
+ * remera oversize y una básica no llevan las mismas medidas.
  */
-export default function SizeChart({ categoria }: { categoria: string }) {
-  const tabla = tablaTallesDe(categoria);
+export default function SizeChart({
+  categoria,
+  molde,
+}: {
+  categoria: string;
+  molde?: string;
+}) {
+  const tabla = tablaTallesDe(categoria, molde ?? MOLDE_POR_DEFECTO);
   const [open, setOpen] = useState(false);
 
   if (!tabla) return null;
