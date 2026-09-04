@@ -61,6 +61,47 @@ export function categoriaDeItem(
 /** Talles sugeridos en el admin (se pueden agregar otros a mano). */
 export const TALLES_SUGERIDOS = ["XS", "S", "M", "L", "XL", "XXL", "Único"];
 
+/**
+ * Orden en que se muestran los talles.
+ *
+ * Ordenar alfabéticamente pondría "L" antes que "M" y "S", que es justo al
+ * revés de como se lee un talle. Los numéricos (12, 14, 16, 18) van primero y
+ * en orden numérico; después los de letra en su orden natural; y al final
+ * cualquier talle raro cargado a mano, alfabético para que no quede al azar.
+ */
+export function ordenarTalles(talles: string[]): string[] {
+  const orden = TALLES_SUGERIDOS;
+  return [...talles].sort((a, b) => {
+    const na = Number(a);
+    const nb = Number(b);
+    const aEsNum = a.trim() !== "" && !Number.isNaN(na);
+    const bEsNum = b.trim() !== "" && !Number.isNaN(nb);
+    if (aEsNum && bEsNum) return na - nb;
+    if (aEsNum) return -1;
+    if (bEsNum) return 1;
+
+    const ia = orden.indexOf(a);
+    const ib = orden.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b, "es");
+  });
+}
+
+/**
+ * Criterios para ordenar el catálogo. El `value` viaja en la URL (?orden=),
+ * así que un listado filtrado se puede compartir tal cual se ve.
+ */
+export const ORDENES_CATALOGO = [
+  { value: "nuevo", label: "Novedades" },
+  { value: "precio-asc", label: "Precio: menor a mayor" },
+  { value: "precio-desc", label: "Precio: mayor a menor" },
+  { value: "nombre", label: "Nombre: A - Z" },
+] as const;
+
+export const ORDEN_POR_DEFECTO = "nuevo";
+
 /** Colores frecuentes sugeridos en el admin. */
 export const COLORES_SUGERIDOS = [
   "Negro",
