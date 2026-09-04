@@ -288,6 +288,79 @@ export async function getVentasParaAnalitica(): Promise<
   return [...online, ...man];
 }
 
+/**
+ * Cobros para el análisis del tablero: cuándo entró la plata, cuánto, y de qué
+ * cliente era la venta que se estaba cobrando.
+ *
+ * Ojo con la fecha: es la del COBRO, no la de la venta. Una venta de marzo que
+ * se termina de pagar en mayo suma en mayo. Es lo correcto para mirar la plata
+ * que entra mes a mes, y por eso no coincide con la facturación del mismo mes.
+ */
+export async function getCobrosParaAnalitica(): Promise<
+  { fecha: string; monto: number; cliente: string }[]
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("cobros")
+    .select("fecha, monto, ventas(cliente)");
+
+  if (error) {
+    console.warn("getCobrosParaAnalitica:", error.message);
+    return [];
+  }
+
+  // El embebido de una relación a-uno puede llegar como objeto o como array de
+  // uno según la versión del cliente; se contemplan las dos formas.
+  type Fila = {
+    fecha: string;
+    monto: number;
+    ventas: { cliente: string | null } | { cliente: string | null }[] | null;
+  };
+
+  return ((data as Fila[]) ?? []).map((c) => {
+    const venta = Array.isArray(c.ventas) ? c.ventas[0] : c.ventas;
+    return {
+      fecha: c.fecha,
+      monto: Number(c.monto) || 0,
+      cliente: venta?.cliente || "",
+    };
+  });
+}
+
+/**
+ * Compras para el análisis del tablero: cuándo se gastó y en qué.
+ *
+ * Se desglosa por tipo de ítem porque no todo gasto pesa igual: la maquinaria
+ * es una inversión que queda, los insumos se consumen y la mercadería se
+ * revende. El total de una compra es la suma de sus ítems, así que los tres
+ * montos siempre cierran contra el total.
+ */
+export async function getComprasParaAnalitica(): Promise<
+  { fecha: string; mercaderia: number; insumos: number; activos: number }[]
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("compras")
+    .select("fecha, items");
+
+  if (error) {
+    console.warn("getComprasParaAnalitica:", error.message);
+    return [];
+  }
+
+  return ((data as { fecha: string; items: CompraItem[] | null }[]) ?? []).map(
+    (c) => {
+      const d = desglosarCompras([{ total: 0, items: c.items }]);
+      return {
+        fecha: c.fecha,
+        mercaderia: d.mercaderia,
+        insumos: d.insumos,
+        activos: d.activos,
+      };
+    },
+  );
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const supabase = await createClient();
   const now = new Date();

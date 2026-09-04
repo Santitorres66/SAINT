@@ -1,29 +1,39 @@
 import Link from "next/link";
 import AnaliticaVentas from "@/components/admin/AnaliticaVentas";
-import { getDashboardStats, getVentasParaAnalitica } from "@/lib/gestion";
+import {
+  getDashboardStats,
+  getVentasParaAnalitica,
+  getCobrosParaAnalitica,
+  getComprasParaAnalitica,
+} from "@/lib/gestion";
 import { getCategoriaPorProducto } from "@/lib/products";
 import { formatPrecio } from "@/lib/constants";
 
 /** TABLERO: analítica de ventas (con filtro de fecha) + stock y capital. */
 export default async function TableroPage() {
-  const [stats, ventas, categoriaPorProducto] = await Promise.all([
-    getDashboardStats(),
-    getVentasParaAnalitica(),
-    getCategoriaPorProducto(),
-  ]);
+  const [stats, ventas, cobros, compras, categoriaPorProducto] =
+    await Promise.all([
+      getDashboardStats(),
+      getVentasParaAnalitica(),
+      getCobrosParaAnalitica(),
+      getComprasParaAnalitica(),
+      getCategoriaPorProducto(),
+    ]);
 
   return (
     <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-semibold text-neutral-900">Tablero</h1>
         <p className="mt-1 text-neutral-500">
-          Filtrá por período y mirá cómo viene tu negocio.
+          Filtrá por período y por cliente, y mirá cómo viene tu negocio.
         </p>
       </div>
 
       {/* Analítica de ventas (KPIs + gráfico, con filtro de fecha) */}
       <AnaliticaVentas
         ventas={ventas}
+        cobros={cobros}
+        compras={compras}
         categoriaPorProducto={categoriaPorProducto}
       />
 
