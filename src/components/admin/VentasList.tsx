@@ -26,6 +26,9 @@ function formatFecha(iso: string) {
 type FiltroCanal = "todas" | "online" | "manual";
 type FiltroCobro = "todos" | "pendiente" | "cobrado";
 
+/** Valor del filtro de cliente cuando no hay ninguno elegido. */
+const TODOS_CLIENTES = "__todos__";
+
 /** Listado unificado de ventas (online + manuales), con su estado de cobro. */
 export default function VentasList({
   ventas,
@@ -45,6 +48,7 @@ export default function VentasList({
   const [canal, setCanal] = useState<FiltroCanal>("todas");
   const [cobro, setCobro] = useState<FiltroCobro>("todos");
   const [categoria, setCategoria] = useState<string>("todas");
+  const [cliente, setCliente] = useState<string>(TODOS_CLIENTES);
   const [cobrandoId, setCobrandoId] = useState<string | null>(
     abrirCobroId ?? null,
   );
@@ -54,6 +58,18 @@ export default function VentasList({
   const ventaCobrando = cobrandoId
     ? ventas.find((v) => v.id === cobrandoId && v.canal === "manual") ?? null
     : null;
+
+  /* Clientes que aparecen en las ventas, con cuántas tiene cada uno. Sale de
+     las ventas y no de la tabla de clientes: acá interesa quien compró. Las
+     ventas web sin nombre quedan afuera; no hay a quién filtrar. */
+  const ventasPorCliente = new Map<string, number>();
+  for (const v of ventas) {
+    const c = (v.cliente ?? "").trim();
+    if (c && c !== "—") ventasPorCliente.set(c, (ventasPorCliente.get(c) ?? 0) + 1);
+  }
+  const clientes = [...ventasPorCliente.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0], "es"),
+  );
 
   const nOnline = ventas.filter((v) => v.canal === "online").length;
   const nManual = ventas.filter((v) => v.canal === "manual").length;
@@ -92,6 +108,24 @@ export default function VentasList({
     (a, b) => b[1] - a[1],
   );
 
+  /* Resumen del cliente elegido. Se calcula sobre TODAS sus ventas y a
+     propósito ignora los otros filtros: "cuánto me debe" no depende de qué
+     rubro o qué canal se esté mirando en la lista. */
+  const resumenCliente =
+    cliente === TODOS_CLIENTES
+      ? null
+      : ventas
+          .filter((v) => (v.cliente ?? "").trim() === cliente)
+          .reduce(
+            (a, v) => ({
+              cantidad: a.cantidad + 1,
+              facturado: a.facturado + Number(v.total),
+              cobrado: a.cobrado + Number(v.total_cobrado),
+              pendiente: a.pendiente + Number(v.saldo),
+            }),
+            { cantidad: 0, facturado: 0, cobrado: 0, pendiente: 0 },
+          );
+
   const visibles = ventas
     .filter((v) => canal === "todas" || v.canal === canal)
     .filter((v) => {
@@ -99,7 +133,10 @@ export default function VentasList({
       if (cobro === "pendiente") return v.saldo > 0;
       return v.saldo <= 0;
     })
-    .filter((v) => categoria === "todas" || aporte(v, categoria).unidades > 0);
+    .filter((v) => categoria === "todas" || aporte(v, categoria).unidades > 0)
+    .filter(
+      (v) => cliente === TODOS_CLIENTES || (v.cliente ?? "").trim() === cliente,
+    );
 
   // Totalizador de lo que se está viendo
   const total = visibles.reduce(
@@ -149,8 +186,8 @@ export default function VentasList({
         </p>
       )}
 
-      {/* Filtro por canal */}
-      <div className="mb-3 flex flex-wrap gap-2">
+      {/* Filtro por canal + por cliente */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         {(
           [
             ["todas", `Todas (${ventas.length})`],
@@ -170,6 +207,24 @@ export default function VentasList({
             {label}
           </button>
         ))}
+
+        {clientes.length > 0 && (
+          <label className="ml-auto flex items-center gap-2 text-sm text-neutral-500">
+            Cliente
+            <select
+              value={cliente}
+              onChange={(e) => setCliente(e.target.value)}
+              className="max-w-[16rem] rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-neutral-900"
+            >
+              <option value={TODOS_CLIENTES}>Todos los clientes</option>
+              {clientes.map(([nombre, n]) => (
+                <option key={nombre} value={nombre}>
+                  {nombre} ({n})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {/* Filtro por estado de cobro */}
@@ -224,12 +279,59 @@ export default function VentasList({
         </div>
       )}
 
+      {/* Cuánto debe el cliente elegido. Es la razón principal para filtrar
+          por cliente, así que va antes que el resto. */}
+      {resumenCliente && (
+        <div className="mb-4 rounded-2xl border border-neutral-200 bg-white p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <p className="font-medium text-neutral-900">{cliente}</p>
+            <p className="text-xs text-neutral-400">
+              {resumenCliente.cantidad}{" "}
+              {resumenCliente.cantidad === 1 ? "venta" : "ventas"} en total ·
+              sin importar los filtros de abajo
+            </p>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-neutral-500">Facturado</p>
+              <p className="text-xl font-semibold text-neutral-900">
+                {formatPrecio(resumenCliente.facturado)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-neutral-500">Cobrado</p>
+              <p className="text-xl font-semibold text-emerald-700">
+                {formatPrecio(resumenCliente.cobrado)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-neutral-500">Pendiente de cobro</p>
+              <p
+                className={`text-xl font-semibold ${
+                  resumenCliente.pendiente > 0
+                    ? "text-amber-700"
+                    : "text-neutral-400"
+                }`}
+              >
+                {formatPrecio(resumenCliente.pendiente)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Totalizador de lo que se está viendo */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-5 py-3">
         <p className="text-sm text-neutral-600">
           {visibles.length} {visibles.length === 1 ? "venta" : "ventas"}
           {categoria !== "todas" && (
             <> con {labelCategoria(categoria).toLowerCase()}</>
+          )}
+          {cliente !== TODOS_CLIENTES && (
+            <>
+              {" "}
+              de <strong className="text-neutral-900">{cliente}</strong>
+            </>
           )}
         </p>
         <div className="flex flex-wrap items-center gap-6">
@@ -249,9 +351,17 @@ export default function VentasList({
       </div>
 
       {visibles.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
-          No hay ventas de ese tipo.
-        </p>
+        <div className="rounded-2xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
+          <p>No hay ventas con estos filtros.</p>
+          {cliente !== TODOS_CLIENTES && (
+            <button
+              onClick={() => setCliente(TODOS_CLIENTES)}
+              className="mt-2 font-medium text-neutral-800 underline underline-offset-2"
+            >
+              Ver todos los clientes
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="space-y-4">
           {visibles.map((v) => (
