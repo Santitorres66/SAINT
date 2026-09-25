@@ -149,8 +149,9 @@ export interface OrderItem {
   precio_unitario: number;
   /**
    * El bordado pedido para ESTE ítem. Queda anotado en la orden para que el
-   * taller no tenga que ir a buscarlo a una conversación de WhatsApp. No tiene
-   * precio: el bordado se cotiza al coordinar.
+   * taller no tenga que ir a buscarlo a una conversación de WhatsApp. No lleva
+   * precio propio: va incluido en el de la prenda, y si el diseño resulta
+   * demasiado complejo eso se habla antes de bordarlo.
    */
   bordado?: BordadoSpec | null;
 }

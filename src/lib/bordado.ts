@@ -71,15 +71,55 @@ export function motivoPorId(id: string): Motivo | undefined {
   return MOTIVOS.find((m) => m.id === id);
 }
 
-/** Los hilos con los que se puede ver el bordado. */
+/**
+ * Los hilos que se pueden probar en pantalla.
+ *
+ * No es el catálogo del taller: ahí hay muchísimos más. Es una paleta amplia
+ * para que casi cualquiera encuentre el suyo o algo parecido, y por eso al
+ * lado hay un campo para escribir el que falte. Limitar la elección a seis
+ * colores haría que el previsualizador diga menos de lo que se puede hacer.
+ */
 export const HILOS: { nombre: string; hex: string }[] = [
-  { nombre: "Crudo", hex: "#ece5d8" },
+  // Neutros
   { nombre: "Negro", hex: "#141414" },
+  { nombre: "Gris", hex: "#8f8f8f" },
+  { nombre: "Plata", hex: "#c9c9c9" },
   { nombre: "Blanco", hex: "#ffffff" },
+  { nombre: "Crudo", hex: "#ece5d8" },
+  { nombre: "Beige", hex: "#d8c9b0" },
+  // Metálicos
   { nombre: "Dorado", hex: "#c9a227" },
+  { nombre: "Cobre", hex: "#a8622d" },
+  // Tierras
+  { nombre: "Camel", hex: "#b08d57" },
+  { nombre: "Marrón", hex: "#6b4b32" },
+  { nombre: "Chocolate", hex: "#42291c" },
+  // Rojos
+  { nombre: "Rojo", hex: "#c0221c" },
   { nombre: "Bordó", hex: "#5e1a1f" },
+  { nombre: "Coral", hex: "#e2705c" },
+  { nombre: "Rosa", hex: "#e0a5b4" },
+  { nombre: "Fucsia", hex: "#c02a72" },
+  // Violetas y azules
+  { nombre: "Lila", hex: "#b9a3d6" },
+  { nombre: "Violeta", hex: "#6b3fa0" },
+  { nombre: "Celeste", hex: "#7fb3e0" },
+  { nombre: "Azul", hex: "#1f3fa0" },
+  { nombre: "Azul marino", hex: "#16233f" },
+  { nombre: "Petróleo", hex: "#1c4b52" },
+  // Verdes
+  { nombre: "Verde agua", hex: "#7fc6b1" },
+  { nombre: "Verde", hex: "#2f7a4f" },
   { nombre: "Verde militar", hex: "#4b5320" },
+  { nombre: "Verde inglés", hex: "#1f4033" },
+  // Amarillos y naranjas
+  { nombre: "Amarillo", hex: "#e4bf3c" },
+  { nombre: "Mostaza", hex: "#c9992a" },
+  { nombre: "Naranja", hex: "#d1691f" },
 ];
+
+/** El tono con el que se dibuja un hilo escrito a mano que no está en la lista. */
+export const HILO_DESCONOCIDO = "#b9b4ab";
 
 /** Qué se borda: uno del catálogo, un texto, o una imagen del cliente. */
 export type TipoBordado = "motivo" | "texto" | "imagen";

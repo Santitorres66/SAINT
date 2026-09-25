@@ -173,7 +173,7 @@ export default function CartDrawer() {
             // "está vacío" a quien acaba de pedir sonaría a que no pasó nada.
             enviado ? (
               <p className="py-20 text-center text-sm uppercase tracking-wide2 text-saint-gray">
-                Pedido enviado ✓
+                Tu pedido está armado
               </p>
             ) : (
               <p className="py-20 text-center text-sm uppercase tracking-wide2 text-saint-gray">
@@ -259,12 +259,13 @@ export default function CartDrawer() {
         {enviado && (
           <div className="space-y-4 border-t border-saint-line px-6 py-6">
             <p className="text-[11px] uppercase tracking-wide2 text-saint-gray">
-              Pedido {enviado.referencia}
+              Pedido {enviado.referencia} · falta un paso
             </p>
             <p className="text-sm leading-relaxed">
-              Tu pedido ya quedó anotado. Abrí WhatsApp y mandá el mensaje —
-              está todo escrito— para que podamos confirmarte el bordado y el
-              precio.
+              <span className="text-saint-white">Todavía no nos llegó.</span> El
+              pedido está escrito y listo: tocá el botón y{" "}
+              <span className="text-saint-white">mandanos el mensaje</span> por
+              WhatsApp. Recién ahí lo recibimos y te confirmamos.
             </p>
 
             <a
@@ -273,7 +274,7 @@ export default function CartDrawer() {
               rel="noopener noreferrer"
               className="inline-flex w-full items-center justify-center gap-2 border border-[#25D366] bg-[#25D366]/10 px-6 py-3 text-xs uppercase tracking-wide2 text-saint-white transition-colors duration-300 hover:bg-[#25D366] hover:text-saint-black"
             >
-              Abrir WhatsApp y enviar
+              Abrir WhatsApp y mandar el pedido
             </a>
 
             {!enviado.guardado && (
@@ -354,10 +355,11 @@ export default function CartDrawer() {
                 </button>
 
                 <p className="text-center text-[11px] leading-relaxed text-saint-gray/60">
-                  Todavía no se paga acá. Te confirmamos por WhatsApp si el
-                  bordado se puede hacer y cuánto sale —la vista previa es una
-                  referencia y el bordado, hecho a mano, no queda idéntico al
-                  dibujo— y recién ahí coordinamos el pago y el envío.
+                  Todavía no se paga acá. El precio ya incluye el bordado; solo
+                  un diseño muy complejo puede tener un costo extra, y en ese
+                  caso te lo decimos antes. La vista previa es una referencia:
+                  el bordado se hace a mano y no queda idéntico al dibujo.
+                  Coordinamos todo por WhatsApp.
                 </p>
               </>
             )}

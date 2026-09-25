@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { colorHex } from "@/lib/constants";
 import {
   describirBordado,
   ESCALA_INICIAL,
+  HILO_DESCONOCIDO,
   ESCALA_MAX,
   ESCALA_MIN,
   HILOS,
@@ -53,6 +55,8 @@ export default function BordadoStudio({
   const [pos, setPos] = useState<Posicion>(POSICION_INICIAL);
   const [escala, setEscala] = useState(ESCALA_INICIAL);
   const [hilo, setHilo] = useState(HILOS[0]);
+  /** Un hilo que el cliente escribió porque no está entre los de la lista. */
+  const [hiloPropio, setHiloPropio] = useState("");
   const [arrastrando, setArrastrando] = useState(false);
 
   const lienzo = useRef<HTMLDivElement>(null);
@@ -68,6 +72,15 @@ export default function BordadoStudio({
   }, [archivo]);
 
   const motivo = motivoPorId(motivoId) ?? MOTIVOS[0];
+
+  // El hilo que vale es el escrito a mano, si lo hay. Se dibuja con el tono
+  // que se le reconozca al nombre y, si no se reconoce ninguno, con un gris
+  // neutro: mejor un color honesto que inventarle uno que no es.
+  const hiloEscrito = hiloPropio.trim();
+  const hiloNombre = hiloEscrito || hilo.nombre;
+  const hiloHex = hiloEscrito
+    ? colorHex(hiloEscrito) ?? HILO_DESCONOCIDO
+    : hilo.hex;
   const ubicacion = ubicacionDe(pos);
   const tamano = tamanoDe(escala);
 
@@ -88,7 +101,7 @@ export default function BordadoStudio({
   // recién lo es cuando se lo confirma con el botón. Mirar el previsualizador
   // no tiene que dejarte un corazón bordado en el carrito sin haberlo pedido.
   const enPantalla: BordadoSpec | null = nombreBordado
-    ? { tipo, motivo: nombreBordado, ubicacion, tamano, hilo: hilo.nombre }
+    ? { tipo, motivo: nombreBordado, ubicacion, tamano, hilo: hiloNombre }
     : null;
 
   const yaEsteMismo =
@@ -203,7 +216,7 @@ export default function BordadoStudio({
             motivo={motivo}
             texto={texto}
             archivo={archivo}
-            hilo={hilo.hex}
+            hilo={hiloHex}
           />
         </div>
 
@@ -346,20 +359,31 @@ export default function BordadoStudio({
           </span>
         </label>
 
-        <div className="flex items-center gap-4">
-          <span className="w-16 shrink-0 text-[10px] uppercase tracking-wide2 text-saint-gray">
-            Hilo
-          </span>
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[10px] uppercase tracking-wide2 text-saint-gray">
+              Hilo
+            </span>
+            <span className="text-[10px] uppercase tracking-wide2 text-saint-gray">
+              {hiloNombre}
+            </span>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             {HILOS.map((h) => (
               <button
                 key={h.nombre}
                 type="button"
-                onClick={() => setHilo(h)}
-                aria-pressed={h.nombre === hilo.nombre}
+                onClick={() => {
+                  setHilo(h);
+                  // Elegir de la paleta suelta lo escrito a mano: si no, el
+                  // punto se marcaría pero el bordado seguiría del otro color.
+                  setHiloPropio("");
+                }}
+                aria-pressed={!hiloEscrito && h.nombre === hilo.nombre}
                 title={h.nombre}
-                className={`h-5 w-5 rounded-full border transition-all duration-300 hover:scale-110 ${
-                  h.nombre === hilo.nombre
+                className={`h-6 w-6 rounded-full border transition-all duration-300 hover:scale-110 ${
+                  !hiloEscrito && h.nombre === hilo.nombre
                     ? "border-saint-white ring-1 ring-saint-white ring-offset-2 ring-offset-saint-black"
                     : "border-saint-line"
                 }`}
@@ -369,6 +393,21 @@ export default function BordadoStudio({
               </button>
             ))}
           </div>
+
+          {/* Tenemos muchos más hilos de los que entran en una paleta. */}
+          <input
+            type="text"
+            value={hiloPropio}
+            maxLength={30}
+            onChange={(e) => setHiloPropio(e.target.value)}
+            placeholder="¿Otro color de hilo? Escribilo"
+            aria-label="Otro color de hilo"
+            className="w-full border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
+          />
+          <p className="text-[11px] leading-relaxed text-saint-gray/70">
+            Estos son algunos. Tenemos muchos más — si el tuyo no está,
+            escribilo y lo buscamos.
+          </p>
         </div>
       </div>
 
@@ -410,8 +449,9 @@ export default function BordadoStudio({
             real lo hace una persona con hilo: tiene relieve, textura y sus
             propias variaciones, y el color del hilo puede verse distinto según
             la tela y la luz. El tamaño y la posición finales los confirmamos
-            con vos por WhatsApp, junto con el precio del bordado, que no está
-            incluido en el de la prenda.
+            con vos por WhatsApp. El bordado ya está incluido en el precio de la
+            prenda; solo un diseño muy complejo puede tener un costo extra, y en
+            ese caso te lo decimos antes de hacerlo.
           </p>
           <Link
             href="/galeria"

@@ -175,8 +175,8 @@ function observacionesDe({
   notas: string;
 }): string {
   const lineas = [
-    "PEDIDO WEB — sin pagar. Falta confirmar viabilidad y precio del bordado.",
-    `Precio de lista de la prenda: ${formatPrecio(Number(i.producto.precio) || 0)}`,
+    "PEDIDO WEB — sin pagar. Confirmar que el bordado se pueda hacer.",
+    `Precio de lista de la prenda (bordado incluido): ${formatPrecio(Number(i.producto.precio) || 0)}`,
   ];
 
   if (telefono) lineas.push(`Tel: ${telefono}`);
@@ -230,8 +230,10 @@ function armarMensaje({
   });
 
   lineas.push("");
-  lineas.push(`Prendas: ${formatPrecio(total)}`);
-  lineas.push("El bordado se cotiza aparte.");
+  // El bordado va incluido en el precio de la prenda. Solo un diseño muy
+  // complejo puede tener un costo extra, y eso se habla en el chat: ponerlo
+  // en el mensaje del cliente lo haría dudar de un precio que ya está bien.
+  lineas.push(`Total: ${formatPrecio(total)}`);
   lineas.push("");
   lineas.push(`Soy ${nombre}${telefono ? ` · ${telefono}` : ""}`);
   if (notas) lineas.push(`Nota: ${notas}`);

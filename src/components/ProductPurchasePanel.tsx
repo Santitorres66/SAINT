@@ -322,10 +322,9 @@ export default function ProductPurchasePanel({
             )}
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-saint-gray">
-            Va anotado en tu pedido. Lo que viste en el previsualizador es una
-            referencia: el bordado real se hace a mano y no queda idéntico al
-            dibujo. El precio del bordado se cotiza aparte, al coordinarlo por
-            WhatsApp.
+            Va anotado en tu pedido y está incluido en el precio. Lo que viste
+            en el previsualizador es una referencia: el bordado real se hace a
+            mano y no queda idéntico al dibujo.
           </p>
         </div>
       ) : (

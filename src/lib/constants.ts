@@ -620,10 +620,10 @@ export function colorHex(nombre: string): string | null {
 /**
  * Si se puede pagar online.
  *
- * Hoy está apagado a propósito. El bordado se cotiza después de mirar el
- * pedido —hay diseños que no se pueden hacer, y otros que valen mucho más de
- * lo que el cliente imagina—, así que cobrar antes de esa charla sería vender
- * algo que todavía no se sabe si se puede entregar.
+ * Hoy está apagado a propósito. Hay pedidos que no se pueden hacer —un diseño
+ * demasiado fino, o tan complejo que ya no entra en el precio de la prenda—, y
+ * eso se ve recién al mirarlo. Cobrar antes de esa charla sería vender algo
+ * que todavía no se sabe si se puede entregar.
  *
  * Mientras tanto el pedido sale por WhatsApp y entra al tablero de Producción
  * como pendiente. Cuando el circuito de pago esté listo, esto pasa a `true` y
