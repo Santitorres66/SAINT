@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Product, ProductVariante } from "@/lib/types";
-import { formatPrecio, whatsappLink } from "@/lib/constants";
+import { colorHex, formatPrecio, whatsappLink } from "@/lib/constants";
 import { useCart } from "@/lib/cart/CartContext";
 import SizeChart from "@/components/SizeChart";
 import ShareButton from "@/components/ShareButton";
 import { describirBordado } from "@/lib/bordado";
 import type { BordadoSpec } from "@/lib/bordado";
+import type { ColorDeFicha } from "@/lib/catalogo";
 
 /**
  * Panel de compra del detalle de producto: selección de talle y color
@@ -20,6 +22,7 @@ import type { BordadoSpec } from "@/lib/bordado";
 export default function ProductPurchasePanel({
   product,
   variantes,
+  coloresModelo = [],
   talleInicial = null,
   colorInicial = null,
   bordado = null,
@@ -28,6 +31,11 @@ export default function ProductPurchasePanel({
 }: {
   product: Product;
   variantes: ProductVariante[];
+  /**
+   * Todos los colores del modelo. Los de otros productos llevan a su ficha:
+   * en la base cada color es un producto, y cada uno tiene su foto y su stock.
+   */
+  coloresModelo?: ColorDeFicha[];
   talleInicial?: string | null;
   colorInicial?: string | null;
   /** El bordado confirmado en el previsualizador, si el cliente armó uno. */
@@ -36,6 +44,8 @@ export default function ProductPurchasePanel({
   /** Lleva a la pestaña del previsualizador. */
   onProbarBordado?: () => void;
 }) {
+  const router = useRouter();
+  const [cambiandoColor, startColor] = useTransition();
   const { addItem, items } = useCart();
   // Preferimos lo que venga del link; si no, y hay una sola opción, esa.
   const [talle, setTalle] = useState<string | null>(
@@ -121,6 +131,36 @@ export default function ProductPurchasePanel({
     });
   }
 
+  // Si la ficha no recibió los colores del modelo (por ejemplo, en una vista
+  // que todavía no los pasa), se cae a los del propio producto: siempre hay
+  // selector de color, aunque sea el de uno solo.
+  const colores: ColorDeFicha[] = coloresModelo.length
+    ? coloresModelo
+    : product.colores.map((c) => ({
+        nombre: c,
+        productId: product.id,
+        esDeEste: true,
+        hayStock: product.stock > 0,
+      }));
+
+  /** El color que se está mostrando, con nombre, para leerlo de un vistazo. */
+  const colorMostrado =
+    color ??
+    (colores.find((c) => c.esDeEste)?.nombre || product.colores[0]) ??
+    "—";
+
+  function elegirColor(c: ColorDeFicha, disponible: boolean) {
+    if (!disponible) return;
+    if (c.esDeEste) {
+      setColor(c.nombre);
+      setAviso(null);
+      return;
+    }
+    // Otro producto: se abre su ficha. `scroll: false` para que la página no
+    // salte arriba — lo único que cambia es la prenda que se está mirando.
+    startColor(() => router.push(`/producto/${c.productId}`, { scroll: false }));
+  }
+
   const detalleSeleccion = [talle && `talle ${talle}`, color && `color ${color}`]
     .filter(Boolean)
     .join(", ");
@@ -190,42 +230,65 @@ export default function ProductPurchasePanel({
         </div>
       )}
 
-      {/* Color: si hay uno solo, se muestra como dato (no se elige) */}
-      {product.colores.length > 1 ? (
+      {/* Color. Están TODOS los del modelo, no solo los de este producto:
+          el cliente piensa "quiero esta gorra en verde", no "quiero el
+          producto de al lado". Elegir un color de otro producto abre su ficha,
+          que es donde vive su foto y su stock. */}
+      {colores.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs uppercase tracking-wide2 text-saint-gray">
-            Color
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {product.colores.map((c) => {
-              const disp = colorDisponible(c);
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-xs uppercase tracking-wide2 text-saint-gray">
+              Color
+            </p>
+            <p className="text-sm text-saint-gray">{colorMostrado}</p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            {colores.map((c) => {
+              // Los colores de este producto respetan el stock por variante;
+              // los de un hermano, su stock total.
+              const disp = c.esDeEste ? colorDisponible(c.nombre) : c.hayStock;
+              const activo = c.esDeEste && color === c.nombre;
+              const hex = colorHex(c.nombre);
+
               return (
                 <button
-                  key={c}
-                  onClick={() => disp && setColor(c)}
-                  disabled={!disp}
-                  className={`border px-4 py-2 text-sm transition-all duration-300 ${
-                    color === c
-                      ? "border-saint-white bg-saint-white text-saint-black"
+                  key={`${c.productId}-${c.nombre}`}
+                  type="button"
+                  onClick={() => elegirColor(c, disp)}
+                  disabled={!disp || cambiandoColor}
+                  title={disp ? c.nombre : `${c.nombre} — sin stock`}
+                  aria-pressed={activo}
+                  className={`relative h-9 w-9 rounded-full border transition-all duration-300 ease-smooth ${
+                    activo
+                      ? "border-saint-white ring-1 ring-saint-white ring-offset-2 ring-offset-saint-black"
                       : disp
-                        ? "border-saint-line text-saint-gray hover:border-saint-white hover:text-saint-white"
-                        : "cursor-not-allowed border-saint-line/40 text-saint-gray/30 line-through"
+                        ? "border-saint-line hover:scale-110 hover:border-saint-white"
+                        : "cursor-not-allowed border-saint-line/40 opacity-40"
                   }`}
+                  style={{ backgroundColor: hex ?? "#d8d5cf" }}
                 >
-                  {c}
+                  {!disp && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-0 flex items-center justify-center text-xs text-saint-black/70"
+                    >
+                      ✕
+                    </span>
+                  )}
+                  <span className="sr-only">{c.nombre}</span>
                 </button>
               );
             })}
           </div>
+
+          {colores.length > 1 && (
+            <p className="text-[11px] text-saint-gray/70">
+              {colores.length} colores · elegí uno y cambia la foto
+            </p>
+          )}
         </div>
-      ) : product.colores.length === 1 ? (
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide2 text-saint-gray">
-            Color
-          </p>
-          <p className="text-sm">{product.colores[0]}</p>
-        </div>
-      ) : null}
+      )}
 
       {/* Disponibilidad de la combinación elegida */}
       {usaVariantes && combinacionCompleta && !sinStock && (

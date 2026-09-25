@@ -246,3 +246,41 @@ export async function getAllProductsAdmin(): Promise<Product[]> {
   }
   return (data as Product[]) ?? [];
 }
+
+/**
+ * Los "hermanos" de un producto: el mismo modelo en los demás colores.
+ *
+ * En la base cada color es un producto aparte, así que el detalle de una
+ * prenda solo conoce su propio color. Para que se puedan elegir todos desde la
+ * ficha —y que la foto cambie al elegir— hay que ir a buscarlos.
+ *
+ * Se los reconoce igual que en la vitrina: mismo rubro y mismo nombre.
+ * Devuelve también al producto pedido, para que la lista de colores esté
+ * completa y en un solo lugar.
+ */
+export async function getHermanosDeModelo(
+  product: Product,
+): Promise<Product[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("activo", true)
+    .eq("categoria", product.categoria)
+    // `ilike` sin comodines compara sin distinguir mayúsculas: "Gorra Baseball"
+    // y "gorra baseball" son el mismo modelo cargado con distinta mano.
+    .ilike("nombre", product.nombre)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("getHermanosDeModelo:", error.message);
+    return [product];
+  }
+
+  const hermanos = (data as Product[]) ?? [];
+  // Si el producto pedido no está entre los activos (se lo desactivó mientras
+  // alguien lo miraba), igual tiene que estar en la lista: es el que se ve.
+  return hermanos.some((p) => p.id === product.id)
+    ? hermanos
+    : [product, ...hermanos];
+}

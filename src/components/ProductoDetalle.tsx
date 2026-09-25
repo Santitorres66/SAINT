@@ -6,6 +6,7 @@ import BordadoStudio from "@/components/BordadoStudio";
 import ProductPurchasePanel from "@/components/ProductPurchasePanel";
 import type { Product, ProductVariante } from "@/lib/types";
 import type { BordadoSpec } from "@/lib/bordado";
+import type { ColorDeFicha } from "@/lib/catalogo";
 
 /**
  * El detalle de producto completo: a la izquierda la prenda (las fotos o el
@@ -18,11 +19,14 @@ import type { BordadoSpec } from "@/lib/bordado";
 export default function ProductoDetalle({
   product,
   variantes,
+  coloresModelo,
   talleInicial,
   colorInicial,
 }: {
   product: Product;
   variantes: ProductVariante[];
+  /** Todos los colores del modelo, incluidos los que son otro producto. */
+  coloresModelo: ColorDeFicha[];
   talleInicial: string | null;
   colorInicial: string | null;
 }) {
@@ -75,6 +79,7 @@ export default function ProductoDetalle({
       <ProductPurchasePanel
         product={product}
         variantes={variantes}
+        coloresModelo={coloresModelo}
         talleInicial={talleInicial}
         colorInicial={colorInicial}
         bordado={bordado}

@@ -616,3 +616,17 @@ export function colorHex(nombre: string): string | null {
     .find((clave) => k.includes(clave));
   return parcial ? HEX_COLORES[parcial] : null;
 }
+
+/**
+ * Si se puede pagar online.
+ *
+ * Hoy está apagado a propósito. El bordado se cotiza después de mirar el
+ * pedido —hay diseños que no se pueden hacer, y otros que valen mucho más de
+ * lo que el cliente imagina—, así que cobrar antes de esa charla sería vender
+ * algo que todavía no se sabe si se puede entregar.
+ *
+ * Mientras tanto el pedido sale por WhatsApp y entra al tablero de Producción
+ * como pendiente. Cuando el circuito de pago esté listo, esto pasa a `true` y
+ * vuelve el botón de Mercado Pago: el checkout sigue entero, sin tocar.
+ */
+export const PAGO_ONLINE_HABILITADO = false;

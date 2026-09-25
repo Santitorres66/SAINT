@@ -197,3 +197,43 @@ export function etiquetaProducto(p: {
   const colores = (p.colores ?? []).filter(Boolean);
   return colores.length ? `${p.nombre} · ${colores.join(" / ")}` : p.nombre;
 }
+
+/** Un color elegible desde la ficha de un producto. */
+export type ColorDeFicha = {
+  nombre: string;
+  /** El producto que hay que abrir para comprarlo. */
+  productId: string;
+  /** Si ese color es del producto que se está viendo. */
+  esDeEste: boolean;
+  hayStock: boolean;
+};
+
+/**
+ * Todos los colores del modelo, para el selector de la ficha.
+ *
+ * Los del producto que se está viendo se eligen sin salir de la página; los de
+ * los hermanos llevan a su ficha, que es donde vive su foto y su stock.
+ */
+export function coloresDeFicha(
+  hermanos: { id: string; colores: string[]; stock: number }[],
+  productIdActual: string,
+): ColorDeFicha[] {
+  const vistos = new Set<string>();
+  const colores: ColorDeFicha[] = [];
+
+  for (const p of hermanos) {
+    for (const c of p.colores ?? []) {
+      const k = claveMolde(c);
+      if (!c || vistos.has(k)) continue;
+      vistos.add(k);
+      colores.push({
+        nombre: c,
+        productId: p.id,
+        esDeEste: p.id === productIdActual,
+        hayStock: p.stock > 0,
+      });
+    }
+  }
+
+  return colores;
+}

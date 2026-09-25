@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductoDetalle from "@/components/ProductoDetalle";
-import { getProductById, getProductVariantes } from "@/lib/products";
+import {
+  getHermanosDeModelo,
+  getProductById,
+  getProductVariantes,
+} from "@/lib/products";
+import { coloresDeFicha } from "@/lib/catalogo";
 
 /**
  * SEO dinámico por producto. Si el link llega con talle/color (lo compartió
@@ -58,7 +63,12 @@ export default async function ProductoPage({
 
   if (!product) notFound();
 
-  const variantes = await getProductVariantes(id);
+  // El stock de este color y el resto de los colores del modelo: van juntos.
+  const [variantes, hermanos] = await Promise.all([
+    getProductVariantes(id),
+    getHermanosDeModelo(product),
+  ]);
+  const coloresModelo = coloresDeFicha(hermanos, product.id);
 
   // Talle y color del link compartido. Los validamos contra el producto para
   // no arrancar con una combinación que no existe.
@@ -79,6 +89,7 @@ export default async function ProductoPage({
       <ProductoDetalle
         product={product}
         variantes={variantes}
+        coloresModelo={coloresModelo}
         talleInicial={talleInicial}
         colorInicial={colorInicial}
       />
