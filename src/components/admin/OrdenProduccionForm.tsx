@@ -21,6 +21,7 @@ import {
   updateOrdenProduccion,
 } from "@/app/admin/produccion-actions";
 import ProduccionFileInput from "./ProduccionFileInput";
+import Buscador from "./Buscador";
 
 type MatrizModo = "ninguna" | "existente" | "nueva";
 
@@ -289,19 +290,20 @@ export default function OrdenProduccionForm({
           </div>
           <div>
             <label className={label}>Cliente</label>
+            {/* Sin clientes cargados el buscador no tendría nada que buscar:
+                ahí queda solo el campo de abajo, para escribir el nombre. */}
             {clientes.length > 0 && (
-              <select
+              <Buscador
+                opciones={clientes.map((c) => ({
+                  value: c.id,
+                  label: nombreCompleto(c),
+                }))}
                 value={clienteId}
-                onChange={(e) => elegirCliente(e.target.value)}
-                className={input + " mb-2"}
-              >
-                <option value="">— Elegir del master —</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {nombreCompleto(c)}
-                  </option>
-                ))}
-              </select>
+                onSelect={(o) => elegirCliente(o?.value ?? "")}
+                placeholder="Buscá el cliente"
+                vacio="— Sin cliente del master —"
+                className="mb-2"
+              />
             )}
             <input
               value={cliente}
@@ -380,19 +382,20 @@ export default function OrdenProduccionForm({
             {/* 1) Modelo (siempre trae lo que hay en stock) */}
             <div>
               <label className={label}>Prenda</label>
-              <select
+              <Buscador
+                opciones={[
+                  ...modelos.map((m) => ({
+                    value: m.nombre,
+                    label: m.nombre,
+                    detalle: `${m.stock} en stock`,
+                  })),
+                  { value: "__mano__", label: "Otra (escribir a mano)" },
+                ]}
                 value={modelo}
-                onChange={(e) => elegirModelo(e.target.value)}
-                className={input}
-              >
-                <option value="">— Elegí la prenda —</option>
-                {modelos.map((m) => (
-                  <option key={m.nombre} value={m.nombre}>
-                    {m.nombre} — {m.stock} en stock
-                  </option>
-                ))}
-                <option value="__mano__">Otra (escribir a mano)</option>
-              </select>
+                onSelect={(o) => elegirModelo(o?.value ?? "")}
+                placeholder="Buscá la prenda"
+                vacio="— Elegí la prenda —"
+              />
             </div>
           </>
         )}
@@ -617,18 +620,13 @@ export default function OrdenProduccionForm({
         {matrizModo === "existente" && (
           <div>
             <label className={label}>Elegí la matriz</label>
-            <select
+            <Buscador
+              opciones={matrices.map((m) => ({ value: m.id, label: m.nombre }))}
               value={matrizId}
-              onChange={(e) => setMatrizId(e.target.value)}
-              className={input}
-            >
-              <option value="">— Elegir —</option>
-              {matrices.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nombre}
-                </option>
-              ))}
-            </select>
+              onSelect={(o) => setMatrizId(o?.value ?? "")}
+              placeholder="Buscá la matriz"
+              vacio="— Elegir —"
+            />
             <p className="mt-1 text-xs text-neutral-400">
               Al reutilizar una matriz no se vuelve a cobrar su costo.
             </p>

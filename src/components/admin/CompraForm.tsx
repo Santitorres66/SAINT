@@ -11,6 +11,8 @@ import type {
 } from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
 import { createCompra, updateCompra } from "@/app/admin/gestion-actions";
+import { etiquetaProducto } from "@/lib/catalogo";
+import Buscador from "./Buscador";
 import MedioPagoCuotas from "./MedioPagoCuotas";
 
 const TIPOS_ITEM: { value: TipoItemCompra; label: string }[] = [
@@ -206,19 +208,14 @@ export default function CompraForm({
           <label htmlFor="proveedor" className={labelClase}>
             Proveedor
           </label>
-          <select
+          <Buscador
             id="proveedor"
+            opciones={proveedores.map((p) => ({ value: p.id, label: p.nombre }))}
             value={proveedorId}
-            onChange={(e) => setProveedorId(e.target.value)}
-            className={inputClase}
-          >
-            <option value="">— Sin proveedor —</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
+            onSelect={(o) => setProveedorId(o?.value ?? "")}
+            placeholder="Buscá el proveedor"
+            vacio="— Sin proveedor —"
+          />
           {proveedores.length === 0 && (
             <p className="mt-1 text-xs text-neutral-400">
               Todavía no tenés proveedores.{" "}
@@ -283,23 +280,19 @@ export default function CompraForm({
                       {esMercaderia ? "Producto" : "Descripción"}
                     </label>
                     {esMercaderia ? (
-                      <select
+                      <Buscador
+                        opciones={products.map((p) => ({
+                          value: p.id,
+                          label: etiquetaProducto(p),
+                          detalle: `stock ${p.stock}`,
+                        }))}
                         value={l.product_id}
-                        onChange={(e) =>
-                          actualizar(i, "product_id", e.target.value)
+                        onSelect={(o) =>
+                          actualizar(i, "product_id", o?.value ?? "")
                         }
-                        className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-                      >
-                        <option value="">— Elegir —</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nombre}
-                            {p.colores.length > 0
-                              ? ` · ${p.colores.join("/")}`
-                              : ""}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="Buscá el producto"
+                        vacio="— Elegir —"
+                      />
                     ) : (
                       <input
                         value={l.descripcion}

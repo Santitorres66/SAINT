@@ -2,8 +2,11 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { TrabajoGaleria, TrabajoInput } from "@/lib/types";
+import type { Cliente, TrabajoGaleria, TrabajoInput } from "@/lib/types";
+import { nombreCompleto } from "@/lib/types";
+import { etiquetaProducto } from "@/lib/catalogo";
 import ImageUploader from "./ImageUploader";
+import Buscador from "./Buscador";
 import { createTrabajo, updateTrabajo } from "@/app/admin/galeria-actions";
 
 /**
@@ -17,11 +20,14 @@ import { createTrabajo, updateTrabajo } from "@/app/admin/galeria-actions";
 export default function TrabajoForm({
   trabajo,
   productos,
+  clientes,
 }: {
   /** Si viene, se edita; si no, se carga uno nuevo. */
   trabajo?: TrabajoGaleria;
   /** El catálogo, para poder enlazar el trabajo con la prenda que se vende. */
-  productos: { id: string; nombre: string }[];
+  productos: { id: string; nombre: string; colores: string[] }[];
+  /** El master de clientes, para no tener que escribir el nombre de memoria. */
+  clientes: Cliente[];
 }) {
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +66,16 @@ export default function TrabajoForm({
       if (res?.error) setError(res.error);
     });
   }
+
+  const opcionesProductos = productos.map((p) => ({
+    value: p.id,
+    label: etiquetaProducto(p),
+  }));
+
+  const opcionesClientes = clientes.map((c) => ({
+    value: c.id,
+    label: nombreCompleto(c),
+  }));
 
   const labelClase = "mb-1.5 block text-sm font-medium text-neutral-700";
   const inputClase =
@@ -123,12 +139,17 @@ export default function TrabajoForm({
             <label htmlFor="cliente" className={labelClase}>
               Cliente
             </label>
-            <input
+            {/* Busca en el master, pero deja escribir libre: el trabajo puede
+                ser de alguien que nunca cargaste como cliente. */}
+            <Buscador
               id="cliente"
-              value={cliente}
-              onChange={(e) => setCliente(e.target.value)}
-              className={inputClase}
-              placeholder="Solo el nombre de pila"
+              opciones={opcionesClientes}
+              value=""
+              textoLibre={cliente}
+              libre
+              onSelect={(o) => setCliente(o?.label ?? "")}
+              placeholder="Buscá o escribí el nombre"
+              vacio="— Sin nombrar —"
             />
             <p className="mt-1.5 text-xs text-neutral-400">
               Dejalo vacío si no te dio permiso para nombrarla.
@@ -153,19 +174,14 @@ export default function TrabajoForm({
           <label htmlFor="producto" className={labelClase}>
             Prenda del catálogo (opcional)
           </label>
-          <select
+          <Buscador
             id="producto"
+            opciones={opcionesProductos}
             value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className={inputClase}
-          >
-            <option value="">— Sin enlazar —</option>
-            {productos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
+            onSelect={(o) => setProductId(o?.value ?? "")}
+            placeholder="Buscá la prenda por nombre o color"
+            vacio="— Sin enlazar —"
+          />
           <p className="mt-1.5 text-xs text-neutral-400">
             Si la enlazás, la foto lleva un botón para comprar esa misma prenda.
             Es el camino más corto entre “qué lindo” y el carrito.

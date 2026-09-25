@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { Product, OrderItem, VentaManual, Cliente } from "@/lib/types";
+import { etiquetaProducto } from "@/lib/catalogo";
+import Buscador from "./Buscador";
 import { nombreCompleto } from "@/lib/types";
 import { formatPrecio, formatNumeroOrden } from "@/lib/constants";
 import { MEDIOS_PAGO } from "@/components/admin/MedioPagoCuotas";
@@ -240,29 +242,27 @@ export default function VentaManualForm({
           <label htmlFor="cliente" className={labelClase}>
             Cliente
           </label>
-          {clientes.length > 0 && (
-            <select
-              value={clienteId}
-              onChange={(e) => elegirCliente(e.target.value)}
-              className={inputClase + " mb-2"}
-            >
-              <option value="">— Elegir del master (o escribir abajo) —</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {nombreCompleto(c)}
-                </option>
-              ))}
-            </select>
-          )}
-          <input
+          {/* Busca en el master y, si el cliente todavía no está cargado, se
+              escribe el nombre y listo: dar de alta la ficha no puede ser un
+              peaje para poder anotar la venta. */}
+          <Buscador
             id="cliente"
-            value={cliente}
-            onChange={(e) => {
-              setCliente(e.target.value);
-              setClienteId("");
+            opciones={clientes.map((c) => ({
+              value: c.id,
+              label: nombreCompleto(c),
+            }))}
+            value={clienteId}
+            textoLibre={cliente}
+            libre
+            onSelect={(o) => {
+              if (o?.value) elegirCliente(o.value);
+              else {
+                setClienteId("");
+                setCliente(o?.label ?? "");
+              }
             }}
-            className={inputClase}
-            placeholder="Nombre del cliente"
+            placeholder="Buscá o escribí el cliente"
+            vacio="— Sin cliente —"
           />
         </div>
         <div>
@@ -315,20 +315,19 @@ export default function VentaManualForm({
           {lineas.map((l, i) => (
             <div key={i} className="space-y-3 rounded-xl bg-neutral-50 p-4">
               <div className="flex items-center justify-between gap-3">
-                <select
-                  value={l.product_id}
-                  onChange={(e) => actualizar(i, "product_id", e.target.value)}
-                  className={inputChico + " max-w-xs"}
-                >
-                  <option value="">— A mano / sin producto —</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                      {p.colores.length > 0 ? ` · ${p.colores.join("/")}` : ""}{" "}
-                      (stock {p.stock})
-                    </option>
-                  ))}
-                </select>
+                <div className="max-w-xs flex-1">
+                  <Buscador
+                    opciones={products.map((p) => ({
+                      value: p.id,
+                      label: etiquetaProducto(p),
+                      detalle: `stock ${p.stock}`,
+                    }))}
+                    value={l.product_id}
+                    onSelect={(o) => actualizar(i, "product_id", o?.value ?? "")}
+                    placeholder="Buscá el producto"
+                    vacio="— A mano / sin producto —"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => quitarLinea(i)}

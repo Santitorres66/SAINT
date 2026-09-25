@@ -181,3 +181,19 @@ export function agruparEnSecciones(modelos: Modelo[]): SeccionCatalogo[] {
       }),
     }));
 }
+
+/**
+ * Cómo se nombra un producto en una lista para elegir.
+ *
+ * El nombre solo no alcanza: como cada color es un producto aparte, un
+ * desplegable termina con seis "Gorra Vintage" seguidas y no hay forma de
+ * saber cuál es cuál. El color es lo que las distingue, así que va en la
+ * etiqueta: "Gorra Vintage · Negro".
+ */
+export function etiquetaProducto(p: {
+  nombre: string;
+  colores?: string[] | null;
+}): string {
+  const colores = (p.colores ?? []).filter(Boolean);
+  return colores.length ? `${p.nombre} · ${colores.join(" / ")}` : p.nombre;
+}

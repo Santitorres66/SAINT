@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import TrabajoForm from "@/components/admin/TrabajoForm";
 import { getTrabajoById } from "@/lib/galeria";
 import { getAllProductsAdmin } from "@/lib/products";
+import { getClientes } from "@/lib/clientes";
 
 /** Editar un trabajo ya cargado. */
 export default async function EditarTrabajoPage({
@@ -10,9 +11,10 @@ export default async function EditarTrabajoPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [trabajo, productos] = await Promise.all([
+  const [trabajo, productos, clientes] = await Promise.all([
     getTrabajoById(id),
     getAllProductsAdmin(),
+    getClientes(),
   ]);
 
   if (!trabajo) notFound();
@@ -22,7 +24,12 @@ export default async function EditarTrabajoPage({
       <h1 className="text-2xl font-medium">Editar trabajo</h1>
       <TrabajoForm
         trabajo={trabajo}
-        productos={productos.map((p) => ({ id: p.id, nombre: p.nombre }))}
+        productos={productos.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          colores: p.colores,
+        }))}
+        clientes={clientes}
       />
     </div>
   );
