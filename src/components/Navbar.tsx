@@ -29,6 +29,14 @@ export default function Navbar() {
             </Link>
           </li>
           <li>
+            <Link
+              href="/galeria"
+              className="transition-colors duration-300 hover:text-saint-white"
+            >
+              Galería
+            </Link>
+          </li>
+          <li>
             <CartButton />
           </li>
         </ul>

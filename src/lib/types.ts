@@ -1,3 +1,5 @@
+import type { BordadoSpec } from "./bordado";
+
 /** Categorías válidas — coinciden con el CHECK de la tabla en Supabase. */
 export type Categoria = "buzo" | "remera" | "gorra" | "canguro" | "crop";
 /* "crop" quedó por compatibilidad con lo que haya cargado de antes: los crops
@@ -117,7 +119,11 @@ export function nombreCompleto(c: {
 
 /** Un ítem dentro del carrito (en el navegador). */
 export interface CartItem {
-  /** Clave única = productId + talle + color (para distinguir variantes). */
+  /**
+   * Clave única = productId + talle + color + bordado. El bordado entra en la
+   * clave porque dos remeras iguales con bordados distintos son dos líneas
+   * distintas del pedido: no se pueden sumar en una sola con cantidad 2.
+   */
   key: string;
   productId: string;
   nombre: string;
@@ -128,6 +134,8 @@ export interface CartItem {
   cantidad: number;
   /** Stock máximo de la variante (para no superar lo disponible). */
   maxStock?: number;
+  /** Lo que se armó en el previsualizador, si se armó algo. */
+  bordado?: BordadoSpec | null;
 }
 
 /** Un ítem tal como se guarda en la orden o venta. */
@@ -139,6 +147,12 @@ export interface OrderItem {
   color: string | null;
   cantidad: number;
   precio_unitario: number;
+  /**
+   * El bordado pedido para ESTE ítem. Queda anotado en la orden para que el
+   * taller no tenga que ir a buscarlo a una conversación de WhatsApp. No tiene
+   * precio: el bordado se cotiza al coordinar.
+   */
+  bordado?: BordadoSpec | null;
 }
 
 /** Estado de una orden de compra. */
@@ -468,3 +482,37 @@ export interface DashboardStats {
   /** Unidades totales en stock. */
   unidadesEnStock: number;
 }
+
+/**
+ * Un trabajo terminado de la galería: la foto de un bordado real, entregado.
+ *
+ * Es la contracara del previsualizador. Aquel muestra una idea; esto muestra
+ * la pieza, con su hilo y su relieve. Por eso vale tanto: es la única prueba
+ * de cómo queda de verdad.
+ */
+export interface TrabajoGaleria {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  /** Una o varias fotos; la primera es la portada. */
+  imagenes: string[];
+  /** Nombre de pila de quien lo encargó, si dio permiso. Puede ir vacío. */
+  cliente: string;
+  /** La prenda, escrita como se lee: "Buzo oversize negro". */
+  prenda: string;
+  /** La prenda del catálogo, si el trabajo se puede volver a pedir. */
+  product_id: string | null;
+  /** Los destacados son los que salen en la home. */
+  destacado: boolean;
+  /** Orden manual: más chico, más arriba. */
+  orden: number;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Lo que carga el formulario del admin (sin los campos automáticos). */
+export type TrabajoInput = Omit<
+  TrabajoGaleria,
+  "id" | "created_at" | "updated_at"
+>;

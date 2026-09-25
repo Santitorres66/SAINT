@@ -3,6 +3,7 @@ import { Preference } from "mercadopago";
 import { getMercadoPagoClient, getSiteUrl } from "@/lib/mercadopago";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrderItem, Product } from "@/lib/types";
+import { sanearBordado } from "@/lib/bordado";
 
 // El SDK de Mercado Pago necesita el runtime de Node.js (no Edge).
 export const runtime = "nodejs";
@@ -12,6 +13,8 @@ type ItemEntrada = {
   talle: string | null;
   color: string | null;
   cantidad: number;
+  /** Lo que armó el cliente en el previsualizador. Viene sin revisar. */
+  bordado?: unknown;
 };
 
 /**
@@ -100,6 +103,10 @@ export async function POST(request: Request) {
         color: item.color ?? null,
         cantidad,
         precio_unitario: Number(prod.precio),
+        // El bordado es una anotación para el taller: no toca el precio (se
+        // cotiza al coordinar) y se guarda recortado, porque lo escribió un
+        // navegador y acá no se confía en nada que venga de ahí.
+        bordado: sanearBordado(item.bordado),
       });
     }
 

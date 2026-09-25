@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import Gallery from "@/components/Gallery";
-import ProductPurchasePanel from "@/components/ProductPurchasePanel";
+import ProductoDetalle from "@/components/ProductoDetalle";
 import { getProductById, getProductVariantes } from "@/lib/products";
 
 /**
@@ -44,8 +43,8 @@ export async function generateMetadata({
 }
 
 /**
- * DETALLE DE PRODUCTO — galería + panel de compra (talle, color, bordado,
- * botón agregar al carrito). El detalle de compra vive en un client component.
+ * DETALLE DE PRODUCTO — la prenda (fotos o previsualizador de bordado) y el
+ * panel de compra. Todo lo interactivo vive en un client component.
  */
 export default async function ProductoPage({
   params,
@@ -77,15 +76,12 @@ export default async function ProductoPage({
         ← Volver a la tienda
       </Link>
 
-      <div className="grid gap-12 lg:grid-cols-2">
-        <Gallery imagenes={product.imagenes} nombre={product.nombre} />
-        <ProductPurchasePanel
-          product={product}
-          variantes={variantes}
-          talleInicial={talleInicial}
-          colorInicial={colorInicial}
-        />
-      </div>
+      <ProductoDetalle
+        product={product}
+        variantes={variantes}
+        talleInicial={talleInicial}
+        colorInicial={colorInicial}
+      />
     </div>
   );
 }

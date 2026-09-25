@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useCart } from "@/lib/cart/CartContext";
 import { formatPrecio } from "@/lib/constants";
+import { describirBordado } from "@/lib/bordado";
 
 /**
  * Panel lateral (drawer) del carrito. Muestra los ítems, permite ajustar
@@ -27,6 +28,7 @@ export default function CartDrawer() {
             talle: i.talle,
             color: i.color,
             cantidad: i.cantidad,
+            bordado: i.bordado ?? null,
           })),
         }),
       });
@@ -113,6 +115,11 @@ export default function CartDrawer() {
                       <p className="mt-1 text-sm text-saint-gray">
                         {formatPrecio(i.precio)}
                       </p>
+                      {i.bordado && (
+                        <p className="mt-1.5 border-l border-saint-line pl-2 text-[11px] leading-relaxed text-saint-gray">
+                          Bordado: {describirBordado(i.bordado)}
+                        </p>
+                      )}
                     </div>
 
                     <div className="mt-2 flex items-center justify-between">
@@ -175,8 +182,9 @@ export default function CartDrawer() {
             </button>
 
             <p className="text-center text-[11px] leading-relaxed text-saint-gray/60">
-              El pago es seguro y lo procesa Mercado Pago. Después coordinamos tu
-              bordado por WhatsApp.
+              El pago es seguro y lo procesa Mercado Pago. Después coordinamos
+              tu bordado por WhatsApp: la vista previa es una referencia y el
+              bordado, hecho a mano, no queda idéntico al dibujo.
             </p>
           </div>
         )}

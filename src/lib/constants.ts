@@ -208,13 +208,38 @@ export function ordenarTalles(talles: string[]): string[] {
  * así que un listado filtrado se puede compartir tal cual se ve.
  */
 export const ORDENES_CATALOGO = [
+  { value: "sugerido", label: "Sugerido" },
   { value: "nuevo", label: "Novedades" },
   { value: "precio-asc", label: "Precio: menor a mayor" },
   { value: "precio-desc", label: "Precio: mayor a menor" },
   { value: "nombre", label: "Nombre: A - Z" },
 ] as const;
 
-export const ORDEN_POR_DEFECTO = "nuevo";
+/**
+ * "Sugerido" es el orden con el que se entra a la tienda: agrupa el catálogo
+ * por rubro (Buzos, Remeras, Gorras, Pilusos, Sombreros) en vez de tirar
+ * treinta y nueve productos sueltos en una sola grilla. Los demás criterios
+ * ordenan de corrido, sin secciones, porque quien pide "de menor a mayor"
+ * quiere justamente eso y no que el precio se reinicie en cada bloque.
+ */
+export const ORDEN_POR_DEFECTO = "sugerido";
+
+/** Si este criterio de orden muestra el catálogo separado en secciones. */
+export function ordenAgrupado(orden: string | undefined): boolean {
+  return (orden ?? ORDEN_POR_DEFECTO) === "sugerido";
+}
+
+/**
+ * En qué orden se muestran los rubros. Lo que no esté acá va al final,
+ * alfabético: una familia nueva cargada desde el admin aparece igual.
+ */
+export const ORDEN_SECCIONES = [
+  "buzo",
+  "remera",
+  "Gorras",
+  "Pilusos",
+  "Sombreros",
+];
 
 /** Colores frecuentes sugeridos en el admin. */
 export const COLORES_SUGERIDOS = [
@@ -529,4 +554,65 @@ export function formatPrecio(valor: number): string {
     currency: "ARS",
     maximumFractionDigits: 0,
   }).format(valor);
+}
+
+/**
+ * El color aproximado de cada nombre de color, para pintar los puntitos que
+ * muestran en qué colores viene un modelo.
+ *
+ * Es una aproximación a propósito: el punto está para reconocer de un vistazo
+ * "ah, viene en verde", no para elegir el tono exacto. El tono real se ve en
+ * la foto, que es lo único fiel.
+ *
+ * Las claves se comparan normalizadas (sin tildes ni mayúsculas) y por
+ * coincidencia parcial, así "Verde militar" y "verde militar oscuro" caen las
+ * dos en el mismo verde.
+ */
+const HEX_COLORES: Record<string, string> = {
+  negro: "#141414",
+  blanco: "#f4f2ee",
+  crudo: "#ece5d8",
+  crema: "#ece5d8",
+  hueso: "#ece5d8",
+  beige: "#d8c9b0",
+  arena: "#d8c9b0",
+  camel: "#b08d57",
+  marron: "#6b4b32",
+  chocolate: "#4a3122",
+  "gris topo": "#8a8178",
+  gris: "#8f8f8f",
+  plomo: "#5a5a5a",
+  "verde militar": "#4b5320",
+  "verde oliva": "#6b6b3a",
+  "verde ingles": "#1f4033",
+  verde: "#2f7a4f",
+  azul: "#1f3fa0",
+  marino: "#16233f",
+  celeste: "#7fb3e0",
+  rojo: "#b1231f",
+  bordo: "#5e1a1f",
+  rosa: "#e0a5b4",
+  fucsia: "#c02a72",
+  violeta: "#6b3fa0",
+  lila: "#b9a3d6",
+  amarillo: "#e4bf3c",
+  mostaza: "#c9992a",
+  naranja: "#d1691f",
+};
+
+/**
+ * El color con el que se pinta el punto de un nombre de color, o `null` si no
+ * se lo reconoce (ahí conviene escribir el nombre y no inventar un tono).
+ */
+export function colorHex(nombre: string): string | null {
+  const k = claveMolde(nombre);
+  if (!k) return null;
+  if (HEX_COLORES[k]) return HEX_COLORES[k];
+
+  // "Verde militar entallado" → verde militar. Se prueba primero con las
+  // claves más largas para que "verde militar" gane sobre "verde".
+  const parcial = Object.keys(HEX_COLORES)
+    .sort((a, b) => b.length - a.length)
+    .find((clave) => k.includes(clave));
+  return parcial ? HEX_COLORES[parcial] : null;
 }

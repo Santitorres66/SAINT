@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 import type { CartItem } from "@/lib/types";
+import { describirBordado } from "@/lib/bordado";
+import type { BordadoSpec } from "@/lib/bordado";
 
 /**
  * Carrito de compras del lado del cliente.
@@ -31,9 +33,22 @@ const CartContext = createContext<CartContextType | null>(null);
 
 const STORAGE_KEY = "saint_cart_v1";
 
-/** Clave única por variante (producto + talle + color). */
-function itemKey(productId: string, talle: string | null, color: string | null) {
-  return `${productId}__${talle ?? "-"}__${color ?? "-"}`;
+/**
+ * Clave única por variante (producto + talle + color + bordado).
+ *
+ * El bordado forma parte de la identidad del ítem: la misma remera, en el
+ * mismo talle y color, con un corazón en el pecho y con las iniciales en la
+ * manga, son dos pedidos distintos. Sin esto, el segundo se sumaría al primero
+ * como "cantidad 2" y uno de los dos bordados se perdería en silencio.
+ */
+function itemKey(
+  productId: string,
+  talle: string | null,
+  color: string | null,
+  bordado?: BordadoSpec | null,
+) {
+  const b = bordado ? describirBordado(bordado) : "-";
+  return `${productId}__${talle ?? "-"}__${color ?? "-"}__${b}`;
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -63,7 +78,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items, cargado]);
 
   function addItem(nuevo: Omit<CartItem, "key">) {
-    const key = itemKey(nuevo.productId, nuevo.talle, nuevo.color);
+    const key = itemKey(
+      nuevo.productId,
+      nuevo.talle,
+      nuevo.color,
+      nuevo.bordado,
+    );
     const max = nuevo.maxStock ?? Infinity;
     setItems((prev) => {
       const existe = prev.find((i) => i.key === key);

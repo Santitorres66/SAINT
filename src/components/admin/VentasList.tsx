@@ -12,6 +12,7 @@ import {
   labelCategoria,
   categoriaDeItem,
 } from "@/lib/constants";
+import { describirBordado } from "@/lib/bordado";
 import { deleteVentaManual } from "@/app/admin/gestion-actions";
 import CobrosPanel from "@/components/admin/CobrosPanel";
 
@@ -455,7 +456,7 @@ export default function VentasList({
 
             <ul className="mt-3 divide-y divide-neutral-100 border-t border-neutral-100 pt-2 text-sm text-neutral-600">
               {v.items.map((it, idx) => (
-                <li key={idx} className="flex justify-between py-1.5">
+                <li key={idx} className="flex justify-between gap-4 py-1.5">
                   <span>
                     {it.cantidad}× {it.nombre}
                     {[it.talle, it.color].filter(Boolean).length > 0 && (
@@ -464,8 +465,18 @@ export default function VentasList({
                         ({[it.talle, it.color].filter(Boolean).join(" · ")})
                       </span>
                     )}
+                    {/* El bordado que pidió el cliente desde la web. Va acá
+                        para que se pueda pasar a la orden de producción sin
+                        tener que ir a buscarlo a un WhatsApp. */}
+                    {it.bordado && (
+                      <span className="mt-0.5 block text-xs text-amber-700">
+                        Bordado: {describirBordado(it.bordado)}
+                      </span>
+                    )}
                   </span>
-                  <span>{formatPrecio(it.precio_unitario * it.cantidad)}</span>
+                  <span className="whitespace-nowrap">
+                    {formatPrecio(it.precio_unitario * it.cantidad)}
+                  </span>
                 </li>
               ))}
             </ul>

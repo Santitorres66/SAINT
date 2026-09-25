@@ -6,10 +6,13 @@ import { formatPrecio, whatsappLink } from "@/lib/constants";
 import { useCart } from "@/lib/cart/CartContext";
 import SizeChart from "@/components/SizeChart";
 import ShareButton from "@/components/ShareButton";
+import { describirBordado } from "@/lib/bordado";
+import type { BordadoSpec } from "@/lib/bordado";
 
 /**
  * Panel de compra del detalle de producto: selección de talle y color
- * (respetando el stock por variante), bloque del bordado y "Agregar al carrito".
+ * (respetando el stock por variante), el bordado armado en el previsualizador
+ * y "Agregar al carrito".
  *
  * `talleInicial` / `colorInicial` vienen del link compartido: quien lo abre ve
  * la misma combinación que estaba mirando la persona que se lo mandó.
@@ -19,11 +22,19 @@ export default function ProductPurchasePanel({
   variantes,
   talleInicial = null,
   colorInicial = null,
+  bordado = null,
+  onQuitarBordado,
+  onProbarBordado,
 }: {
   product: Product;
   variantes: ProductVariante[];
   talleInicial?: string | null;
   colorInicial?: string | null;
+  /** El bordado confirmado en el previsualizador, si el cliente armó uno. */
+  bordado?: BordadoSpec | null;
+  onQuitarBordado?: () => void;
+  /** Lleva a la pestaña del previsualizador. */
+  onProbarBordado?: () => void;
 }) {
   const { addItem, items } = useCart();
   // Preferimos lo que venga del link; si no, y hay una sola opción, esa.
@@ -106,15 +117,26 @@ export default function ProductPurchasePanel({
       color,
       cantidad: 1,
       maxStock: usaVariantes ? stockSeleccion : undefined,
+      bordado,
     });
   }
 
   const detalleSeleccion = [talle && `talle ${talle}`, color && `color ${color}`]
     .filter(Boolean)
     .join(", ");
-  const mensajeBordado = `¡Hola SAINT! 🖤 Me interesa "${product.nombre}"${
-    detalleSeleccion ? ` (${detalleSeleccion})` : ""
-  } y quiero un BORDADO PERSONALIZADO (no de los que están en la web). Te voy a enviar una imagen del diseño que quiero, para coordinar el bordado y el envío. ¡Gracias!`;
+  // Si ya lo armó en el previsualizador, el mensaje sale con el pedido escrito
+  // y no hay que reconstruirlo a mano en la conversación.
+  const mensajeBordado = bordado
+    ? `¡Hola SAINT! 🖤 Me interesa "${product.nombre}"${
+        detalleSeleccion ? ` (${detalleSeleccion})` : ""
+      } con este BORDADO: ${describirBordado(bordado)}.${
+        bordado.tipo === "imagen"
+          ? " Te mando la imagen del diseño por acá."
+          : ""
+      } Quiero coordinar el bordado y el envío. ¡Gracias!`
+    : `¡Hola SAINT! 🖤 Me interesa "${product.nombre}"${
+        detalleSeleccion ? ` (${detalleSeleccion})` : ""
+      } y quiero un BORDADO PERSONALIZADO (no de los que están en la web). Te voy a enviar una imagen del diseño que quiero, para coordinar el bordado y el envío. ¡Gracias!`;
   const bordadoHref = whatsappLink(mensajeBordado);
 
   return (
@@ -212,6 +234,52 @@ export default function ProductPurchasePanel({
             ? `Disponible${stockSeleccion <= 5 ? ` · quedan ${stockSeleccion}` : ""}`
             : "Sin stock en esa combinación"}
         </p>
+      )}
+
+      {/* El bordado armado en el previsualizador */}
+      {bordado ? (
+        <div className="border border-saint-white/40 bg-saint-ink/60 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide2 text-saint-gray">
+                Tu bordado
+              </p>
+              <p className="mt-2 text-sm leading-relaxed">
+                {describirBordado(bordado)}
+              </p>
+            </div>
+            {onQuitarBordado && (
+              <button
+                type="button"
+                onClick={onQuitarBordado}
+                className="shrink-0 text-[10px] uppercase tracking-wide2 text-saint-gray transition-colors hover:text-red-400"
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-saint-gray">
+            Va anotado en tu pedido. Lo que viste en el previsualizador es una
+            referencia: el bordado real se hace a mano y no queda idéntico al
+            dibujo. El precio del bordado se cotiza aparte, al coordinarlo por
+            WhatsApp.
+          </p>
+        </div>
+      ) : (
+        onProbarBordado && (
+          <button
+            type="button"
+            onClick={onProbarBordado}
+            className="group w-full border border-dashed border-saint-line px-5 py-4 text-left transition-colors duration-300 hover:border-saint-white"
+          >
+            <p className="text-[11px] uppercase tracking-wide2 text-saint-gray">
+              Esta prenda sale lisa
+            </p>
+            <p className="mt-1 text-sm text-saint-gray transition-colors group-hover:text-saint-white">
+              Probá cómo queda con tu bordado →
+            </p>
+          </button>
+        )
       )}
 
       {/* Botón */}

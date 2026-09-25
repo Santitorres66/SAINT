@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import StoreFilters from "@/components/StoreFilters";
 import ProductGrid from "@/components/ProductGrid";
+import Reveal from "@/components/Reveal";
 import { getActiveProducts, getOpcionesDeCatalogo } from "@/lib/products";
-import { labelCategoria } from "@/lib/constants";
+import { agruparModelos } from "@/lib/catalogo";
+import { labelCategoria, ordenAgrupado } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Tienda",
@@ -71,27 +73,47 @@ export default async function TiendaPage({
     sp.q || sp.talle || sp.color || sp.min || sp.max,
   );
 
+  // Lo que se cuenta en pantalla son modelos, no filas de la base: quien mira
+  // la tienda ve una gorra que viene en cuatro colores, no cuatro gorras.
+  const modelos = agruparModelos(products).length;
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-20">
       {/* Encabezado */}
       <div className="mb-12 text-center">
-        <h1 className="font-serif text-4xl font-light sm:text-5xl">Tienda</h1>
-        <p className="mt-3 text-sm text-saint-gray">
+        <h1 className="anim-sube font-serif text-4xl font-light sm:text-5xl">
+          Tienda
+        </h1>
+        <p
+          className="anim-sube mt-3 text-sm text-saint-gray"
+          style={{ ["--d" as string]: "120ms" }}
+        >
           {sp.categoria
             ? labelCategoria(sp.categoria)
             : "Toda la colección · elegí tu pieza y hacela tuya"}
+        </p>
+
+        {/* Los dos pasos, dichos al entrar: primero la prenda, después el
+            bordado. Es el recorrido completo de la marca en una línea. */}
+        <p
+          className="anim-sube mt-6 text-[11px] uppercase tracking-wide2 text-saint-gray/70"
+          style={{ ["--d" as string]: "240ms" }}
+        >
+          Paso 1 · elegí la prenda <span className="mx-2">—</span> Paso 2 ·
+          elegí el bordado
         </p>
       </div>
 
       {/* Filtros (Suspense porque usan useSearchParams) */}
       <div className="mb-14">
         <Suspense fallback={null}>
-          <StoreFilters opciones={opciones} cantidad={products.length} />
+          <StoreFilters opciones={opciones} cantidad={modelos} />
         </Suspense>
       </div>
 
       <ProductGrid
         products={products}
+        secciones={ordenAgrupado(sp.orden)}
         emptyMessage={
           hayFiltros
             ? "No encontramos piezas con esos filtros. Probá quitando alguno."

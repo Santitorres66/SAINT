@@ -69,3 +69,143 @@
            ease-smooth hover:bg-saint-white hover:text-saint-black;
   }
 }
+
+/* ============================================================
+   MOVIMIENTO
+   Todo el movimiento de la web sale de acá. La regla es una sola:
+   se nota que algo entró, no se nota la animación. Nada rebota,
+   nada gira, nada tarda más de tres cuartos de segundo.
+   ============================================================ */
+
+@keyframes saint-sube {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes saint-aparece {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* La línea fina del logo se dibuja de adentro hacia afuera. */
+@keyframes saint-linea {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Las letras de SAINT llegan desenfocadas y con el espaciado abierto de más:
+   el nombre "se acomoda" en lugar de aparecer de golpe. */
+@keyframes saint-letra {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* El hilo del bordado: se cose solo. */
+@keyframes saint-hilo {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@layer utilities {
+  /* Entra al cargar la página (lo que ya está en pantalla: el hero). */
+  .anim-sube {
+    opacity: 0;
+    animation: saint-sube 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--d, 0ms);
+  }
+
+  .anim-aparece {
+    opacity: 0;
+    animation: saint-aparece 1.2s ease forwards;
+    animation-delay: var(--d, 0ms);
+  }
+
+  .anim-letra {
+    display: inline-block;
+    opacity: 0;
+    animation: saint-letra 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--d, 0ms);
+  }
+
+  .anim-linea {
+    transform: scaleX(0);
+    animation: saint-linea 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation-delay: var(--d, 0ms);
+  }
+
+  /* Entra al llegar con el scroll (lo de más abajo). El componente Reveal
+     agrega `es-visible` cuando la pieza asoma en pantalla. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(1.75rem);
+    transition:
+      opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--d, 0ms);
+  }
+
+  .reveal.es-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* El hilo del bordado: se cose cuando la sección entra en pantalla. El largo
+   del trazo lo pasa cada SVG en `--largo` (el `pathLength` que le fija). */
+.hilo {
+  stroke-dasharray: var(--largo, 100);
+  stroke-dashoffset: var(--largo, 100);
+}
+
+.reveal.es-visible .hilo {
+  animation: saint-hilo 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: 200ms;
+}
+
+/* Quien pidió menos movimiento en su sistema ve la web quieta y completa.
+   No es un detalle de accesibilidad de compromiso: hay gente a la que el
+   movimiento le marea de verdad. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .hilo {
+    stroke-dashoffset: 0 !important;
+  }
+
+  .anim-sube,
+  .anim-aparece,
+  .anim-letra,
+  .anim-linea,
+  .reveal {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}

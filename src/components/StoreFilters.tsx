@@ -34,7 +34,11 @@ export default function StoreFilters({
   cantidad,
 }: {
   opciones: OpcionesCatalogo;
-  /** Cuántos productos quedaron, para mostrar el resultado del filtrado. */
+  /**
+   * Cuántos MODELOS quedaron. No son filas de la base: la vitrina agrupa los
+   * colores de una misma prenda en una sola tarjeta, y el número tiene que
+   * decir lo mismo que se ve.
+   */
   cantidad: number;
 }) {
   const router = useRouter();
@@ -310,7 +314,7 @@ export default function StoreFilters({
             pendiente ? "opacity-40" : "opacity-100"
           }`}
         >
-          {cantidad === 1 ? "1 producto" : `${cantidad} productos`}
+          {cantidad === 1 ? "1 modelo" : `${cantidad} modelos`}
         </p>
       </div>
     </div>

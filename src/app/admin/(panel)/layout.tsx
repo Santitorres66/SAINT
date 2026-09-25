@@ -16,6 +16,7 @@ const SECCIONES = [
   { href: "/admin/compras", label: "Compras" },
   { href: "/admin/proveedores", label: "Proveedores" },
   { href: "/admin/produccion", label: "Producción" },
+  { href: "/admin/galeria", label: "Galería" },
 ];
 
 export default async function PanelLayout({
