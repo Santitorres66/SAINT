@@ -2,11 +2,19 @@
 export type Categoria = "buzo" | "remera" | "gorra" | "canguro" | "crop";
 
 /**
- * Molde de la prenda. La categoría no alcanza para saber cómo calza: una remera
- * oversize y una básica son las dos `categoria = "remera"` pero tienen tablas de
- * talles distintas. Coincide con el CHECK de la tabla en Supabase.
+ * Molde (o tipo) de la prenda: el subgrupo dentro de su categoría.
+ *
+ * La categoría sola no alcanza. Una remera oversize y una básica son las dos
+ * `categoria = "remera"` pero tienen tablas de talles distintas; y dentro de
+ * las gorras conviven vintage, baseball y trucker, que no son lo mismo a la
+ * hora de ponerles precio.
+ *
+ * Es texto libre a propósito: los modelos aparecen y desaparecen más rápido de
+ * lo que conviene tocar una lista cerrada en la base. El admin sugiere los
+ * habituales por categoría (ver MOLDES_SUGERIDOS) para que no se llene de
+ * variantes escritas distinto.
  */
-export type Molde = "oversize" | "basica";
+export type Molde = string;
 
 /** Un producto tal como vive en la tabla `products`. */
 export interface Product {

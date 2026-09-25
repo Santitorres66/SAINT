@@ -9,24 +9,60 @@ export const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: "gorra", label: "Gorras" },
 ];
 
-/** Moldes con etiqueta legible (para el select del admin). */
-export const MOLDES: { value: Molde; label: string }[] = [
-  { value: "oversize", label: "Oversize" },
-  { value: "basica", label: "Básica" },
-];
-
 /** El molde de lo que ya estaba cargado antes de que existiera el campo. */
 export const MOLDE_POR_DEFECTO: Molde = "oversize";
 
 /**
- * Categorías donde el molde cambia las medidas y hay que elegirlo. En el resto
- * (buzos, canguros, gorras) hay un solo molde, así que el selector no aparece.
+ * Moldes que el admin ofrece según la categoría.
+ *
+ * Son sugerencias, no una lista cerrada: siempre se puede escribir uno nuevo.
+ * Están para que el mismo modelo no termine cargado de tres formas distintas,
+ * que es lo que rompe el agrupado del listado.
  */
-export const CATEGORIAS_CON_MOLDE: string[] = ["remera", "crop"];
+export const MOLDES_SUGERIDOS: Record<string, string[]> = {
+  remera: ["Oversize", "Básica", "Boxy", "Heavyweight"],
+  crop: ["Oversize", "Básica", "Boxy"],
+  buzo: ["Oversize", "Cuello redondo", "Media cierre"],
+  canguro: ["Oversize", "Clásico"],
+  gorra: ["Vintage", "Baseball", "Trucker"],
+};
 
-/** Devuelve la etiqueta legible de un molde. */
+/** Los moldes sugeridos de una categoría (vacío si no tiene). */
+export function moldesDe(categoria: string): string[] {
+  return MOLDES_SUGERIDOS[categoria] ?? [];
+}
+
+/**
+ * La clave con la que se agrupan dos moldes.
+ *
+ * "Oversize", "oversize" y " Oversize " son el mismo grupo: sin esto, un
+ * espacio de más partiría un bloque en dos y el listado mentiría.
+ */
+export function claveMolde(molde: string): string {
+  return (molde ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/**
+ * Devuelve el molde con la grafía de la sugerencia que le corresponde.
+ *
+ * Lo guardado de antes viene en minúscula ("oversize") y las sugerencias están
+ * capitalizadas ("Oversize"). Sin esto, el select del formulario no encontraría
+ * su opción y se vería vacío al editar un producto que sí tiene tipo.
+ */
+export function canonizarMolde(categoria: string, molde: string): string {
+  const k = claveMolde(molde);
+  return moldesDe(categoria).find((m) => claveMolde(m) === k) ?? molde;
+}
+
+/** Devuelve el molde como se muestra: sin espacios sobrantes, o un guión. */
 export function labelMolde(value: string): string {
-  return MOLDES.find((m) => m.value === value)?.label ?? value;
+  const v = (value ?? "").trim();
+  if (!v) return "—";
+  return v.charAt(0).toUpperCase() + v.slice(1);
 }
 
 /** Categoría de los ítems que no se pueden clasificar. */
@@ -388,8 +424,10 @@ export function tablaTallesDe(
 ): TablaTalles | null {
   const familia = FAMILIA_DE_CATEGORIA[categoria];
   if (!familia) return null;
+  // Las tablas se indexan en minúscula y sin tildes; el molde se guarda como
+  // se escribió ("Básica"), así que se normaliza antes de buscar.
   return (
-    TABLAS_TALLES[`${familia}_${molde}`] ??
+    TABLAS_TALLES[`${familia}_${claveMolde(molde)}`] ??
     TABLAS_TALLES[`${familia}_${MOLDE_POR_DEFECTO}`] ??
     null
   );

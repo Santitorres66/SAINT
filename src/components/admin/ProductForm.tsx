@@ -14,9 +14,10 @@ import type {
 } from "@/lib/types";
 import {
   CATEGORIAS,
-  CATEGORIAS_CON_MOLDE,
-  MOLDES,
   MOLDE_POR_DEFECTO,
+  canonizarMolde,
+  claveMolde,
+  moldesDe,
   TALLES_SUGERIDOS,
   COLORES_SUGERIDOS,
 } from "@/lib/constants";
@@ -61,12 +62,22 @@ export default function ProductForm({
   const [categoria, setCategoria] = useState<Categoria>(
     initial?.categoria ?? "buzo",
   );
-  const [molde, setMolde] = useState<Molde>(
-    initial?.molde ?? MOLDE_POR_DEFECTO,
+  const [molde, setMolde] = useState<Molde>(() =>
+    initial
+      ? canonizarMolde(initial.categoria, initial.molde)
+      : MOLDE_POR_DEFECTO,
   );
-  // Sólo algunas categorías vienen en más de un molde; en el resto el selector
-  // no se muestra y el valor queda en el molde por defecto.
-  const eligeMolde = CATEGORIAS_CON_MOLDE.includes(categoria);
+  /* El tipo se sugiere según la categoría, pero se puede escribir uno nuevo:
+     los modelos cambian más seguido de lo que conviene tocar una lista fija.
+     `otroTipo` es el modo "escribirlo a mano". */
+  const sugeridos = moldesDe(categoria);
+  const [otroTipo, setOtroTipo] = useState(
+    () =>
+      Boolean(initial?.molde) &&
+      !moldesDe(initial!.categoria).some(
+        (m) => claveMolde(m) === claveMolde(initial!.molde),
+      ),
+  );
   const [precio, setPrecio] = useState(String(initial?.precio ?? ""));
   const [costo, setCosto] = useState(String(initial?.costo ?? ""));
   // Stock por variante (talle + color). Clave: `${talle}|||${color}`
@@ -162,7 +173,7 @@ export default function ProductForm({
     const input: ProductInput = {
       nombre,
       categoria,
-      molde: eligeMolde ? molde : MOLDE_POR_DEFECTO,
+      molde: molde.trim() || MOLDE_POR_DEFECTO,
       precio: Number(precio),
       costo: Number(costo) || 0,
       stock: totalStock,
@@ -241,28 +252,61 @@ export default function ProductForm({
           </select>
         </div>
 
-        {eligeMolde && (
-          <div>
-            <label htmlFor="molde" className={labelClase}>
-              Molde *
-            </label>
+        <div>
+          <label htmlFor="molde" className={labelClase}>
+            Tipo *
+          </label>
+          {otroTipo ? (
+            <div className="flex gap-2">
+              <input
+                id="molde"
+                value={molde}
+                onChange={(e) => setMolde(e.target.value)}
+                className={inputClase}
+                placeholder="Ej: Trucker"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setOtroTipo(false);
+                  setMolde(sugeridos[0] ?? MOLDE_POR_DEFECTO);
+                }}
+                className="shrink-0 rounded-lg border border-neutral-300 px-4 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100"
+              >
+                Elegir de la lista
+              </button>
+            </div>
+          ) : (
             <select
               id="molde"
               value={molde}
-              onChange={(e) => setMolde(e.target.value as Molde)}
+              onChange={(e) => {
+                if (e.target.value === "__otro__") {
+                  setOtroTipo(true);
+                  setMolde("");
+                } else setMolde(e.target.value);
+              }}
               className={inputClase}
             >
-              {MOLDES.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
+              {/* El valor guardado puede no estar entre los sugeridos (venía de
+                  antes, o lo escribió otra persona): se agrega para no pisarlo
+                  sin querer al abrir el formulario. */}
+              {!sugeridos.some((m) => claveMolde(m) === claveMolde(molde)) && (
+                <option value={molde}>{molde}</option>
+              )}
+              {sugeridos.map((m) => (
+                <option key={m} value={m}>
+                  {m}
                 </option>
               ))}
+              <option value="__otro__">Otro… (escribirlo)</option>
             </select>
-            <p className="mt-1.5 text-sm text-neutral-500">
-              Define qué tabla de talles ve el cliente en la web.
-            </p>
-          </div>
-        )}
+          )}
+          <p className="mt-1.5 text-sm text-neutral-500">
+            Agrupa el producto en el listado y define qué tabla de talles ve el
+            cliente en la web.
+          </p>
+        </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
           <div>

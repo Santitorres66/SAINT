@@ -238,6 +238,38 @@ export async function registrarPerdida(
 }
 
 /** Activa o desactiva un producto (mostrar/ocultar en la web). */
+/**
+ * Cambia el precio de varios productos de una sola vez.
+ *
+ * Los productos de un mismo tipo suelen compartir precio (todos los buzos
+ * oversize valen lo mismo, cambie el color que cambie). Actualizarlos de a uno
+ * desde el formulario era el camino largo para una lista, y el riesgo real era
+ * dejar la mitad del grupo con el precio viejo.
+ *
+ * Solo toca `precio`: el costo se carga con la compra, no se estima acá.
+ */
+export async function actualizarPrecios(
+  ids: string[],
+  precio: number,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  if (!ids.length) return { error: "No hay productos para actualizar." };
+  if (!Number.isFinite(precio) || precio < 0)
+    return { error: "El precio tiene que ser un número de 0 para arriba." };
+
+  const { error } = await supabase
+    .from("products")
+    .update({ precio })
+    .in("id", ids);
+  if (error) return { error: `No se pudo actualizar: ${error.message}` };
+
+  // Cambió el precio de varias fichas a la vez: se revalida cada una.
+  ids.forEach((id) => revalidarPublico(id));
+  return { ok: true };
+}
+
 export async function toggleActivo(
   id: string,
   activo: boolean,
