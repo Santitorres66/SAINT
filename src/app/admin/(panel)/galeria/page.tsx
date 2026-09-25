@@ -12,8 +12,9 @@ export default async function GaleriaAdminPage() {
         <div>
           <h1 className="text-2xl font-medium">Galería</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Los bordados ya entregados. Es lo que prueba cómo queda una pieza de
-            verdad — y lo que más vende.
+            Los bordados ya entregados: lo que prueba cómo queda una pieza de
+            verdad. Subí todo lo que hagas — lo que no quieras mostrar queda en
+            el archivo, guardado y fuera de la web.
           </p>
         </div>
 

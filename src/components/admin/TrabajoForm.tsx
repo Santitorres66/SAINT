@@ -221,7 +221,8 @@ export default function TrabajoForm({
               Visible en la web
             </span>
             <span className="text-xs text-neutral-400">
-              Destildalo para ocultarlo sin perderlo.
+              Destildalo y el trabajo pasa al archivo: queda guardado acá, no se
+              ve en la web, y lo mostrás el día que quieras.
             </span>
           </span>
         </label>

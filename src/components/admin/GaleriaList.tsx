@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { TrabajoGaleria } from "@/lib/types";
+import { claveMolde } from "@/lib/constants";
 import {
   deleteTrabajo,
   toggleTrabajoActivo,
@@ -12,10 +13,19 @@ import {
 } from "@/app/admin/galeria-actions";
 
 /**
- * Listado de la galería en el panel: las fotos cargadas, con lo que se hace
- * todos los días a mano (mostrar, destacar, editar, borrar) al alcance de un
- * clic sobre la miniatura.
+ * Listado de la galería en el panel.
+ *
+ * La galería son dos cosas a la vez: lo que se muestra en la web y el archivo
+ * de todo lo que se bordó. Mezclados en una sola pila, a partir de la foto
+ * treinta no se encuentra nada, así que arriba hay un filtro por estado y una
+ * búsqueda por texto.
+ *
+ * Todo el filtrado pasa acá, en el navegador: son las fotos que ya están en
+ * pantalla, no hace falta volver a pedirle nada al servidor por escribir una
+ * letra.
  */
+
+type Filtro = "todos" | "web" | "home" | "archivo";
 export default function GaleriaList({
   trabajos,
 }: {
@@ -25,6 +35,8 @@ export default function GaleriaList({
   const [pendiente, startTransition] = useTransition();
   const [borrando, setBorrando] = useState<TrabajoGaleria | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<Filtro>("todos");
+  const [q, setQ] = useState("");
 
   /** Corre una acción y vuelve a pedir la lista, como el resto del panel. */
   function ejecutar(accion: () => Promise<{ error?: string }>) {
@@ -35,6 +47,29 @@ export default function GaleriaList({
       else router.refresh();
     });
   }
+
+  // Cuántos hay de cada cosa, para que el filtro diga lo que va a mostrar
+  // antes de tocarlo.
+  const cuenta = {
+    todos: trabajos.length,
+    web: trabajos.filter((t) => t.activo).length,
+    home: trabajos.filter((t) => t.activo && t.destacado).length,
+    archivo: trabajos.filter((t) => !t.activo).length,
+  };
+
+  const visibles = useMemo(() => {
+    const palabras = claveMolde(q).split(/\s+/).filter(Boolean);
+
+    return trabajos.filter((t) => {
+      if (filtro === "web" && !t.activo) return false;
+      if (filtro === "home" && !(t.activo && t.destacado)) return false;
+      if (filtro === "archivo" && t.activo) return false;
+
+      if (!palabras.length) return true;
+      const texto = claveMolde(`${t.titulo} ${t.prenda} ${t.cliente} ${t.descripcion}`);
+      return palabras.every((p) => texto.includes(p));
+    });
+  }, [trabajos, filtro, q]);
 
   if (!trabajos.length) {
     return (
@@ -65,8 +100,65 @@ export default function GaleriaList({
         </p>
       )}
 
+      {/* Filtro y búsqueda */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["todos", "Todos"],
+              ["web", "En la web"],
+              ["home", "En la home"],
+              ["archivo", "Archivo"],
+            ] as [Filtro, string][]
+          ).map(([valor, label]) => (
+            <button
+              key={valor}
+              type="button"
+              onClick={() => setFiltro(valor)}
+              aria-pressed={filtro === valor}
+              className={`rounded-lg px-3.5 py-2 text-sm transition ${
+                filtro === valor
+                  ? "bg-neutral-900 text-white"
+                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+              }`}
+            >
+              {label}
+              <span
+                className={`ml-2 text-xs ${
+                  filtro === valor ? "text-white/60" : "text-neutral-400"
+                }`}
+              >
+                {cuenta[valor]}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por título, prenda o cliente"
+          aria-label="Buscar en la galería"
+          className="w-full rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 sm:max-w-xs"
+        />
+      </div>
+
+      {/* Qué es el archivo, dicho una vez y donde corresponde. */}
+      {filtro === "archivo" && (
+        <p className="mb-5 rounded-lg bg-neutral-100 px-4 py-3 text-sm text-neutral-600">
+          Estos trabajos no se ven en la web. Es tu registro: subí todo lo que
+          bordes, y el día que quieras mostrar alguno, tocá “Mostrar”.
+        </p>
+      )}
+
+      {visibles.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-16 text-center text-sm text-neutral-500">
+          No hay trabajos que coincidan con eso.
+        </p>
+      ) : (
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {trabajos.map((t) => (
+        {visibles.map((t) => (
           <article
             key={t.id}
             className={`overflow-hidden rounded-2xl border bg-white transition ${
@@ -155,6 +247,7 @@ export default function GaleriaList({
           </article>
         ))}
       </div>
+      )}
 
       {/* Borrar es para siempre, así que se pregunta. */}
       {borrando && (
