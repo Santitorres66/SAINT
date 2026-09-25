@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { MOLDE_POR_DEFECTO } from "@/lib/constants";
 import type {
   ProductInput,
   ActionResult,
@@ -67,7 +66,8 @@ export async function createProduct(
     .insert({
       nombre: input.nombre.trim(),
       categoria: input.categoria,
-      molde: input.molde ?? MOLDE_POR_DEFECTO,
+      familia: input.familia ?? "",
+      molde: input.molde ?? "",
       precio: input.precio,
       costo: input.costo ?? 0,
       descripcion: input.descripcion?.trim() ?? "",
@@ -133,7 +133,8 @@ export async function updateProduct(
     .update({
       nombre: input.nombre.trim(),
       categoria: input.categoria,
-      molde: input.molde ?? MOLDE_POR_DEFECTO,
+      familia: input.familia ?? "",
+      molde: input.molde ?? "",
       precio: input.precio,
       costo: input.costo ?? 0,
       descripcion: input.descripcion?.trim() ?? "",

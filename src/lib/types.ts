@@ -1,5 +1,7 @@
 /** Categorías válidas — coinciden con el CHECK de la tabla en Supabase. */
 export type Categoria = "buzo" | "remera" | "gorra" | "canguro" | "crop";
+/* "crop" quedó por compatibilidad con lo que haya cargado de antes: los crops
+   ahora son un tipo de remera y la categoría no se ofrece más. */
 
 /**
  * Molde (o tipo) de la prenda: el subgrupo dentro de su categoría.
@@ -21,6 +23,12 @@ export interface Product {
   id: string;
   nombre: string;
   categoria: Categoria;
+  /**
+   * Familia: el nivel intermedio, solo en las categorías que lo usan. En
+   * "Gorras y sombreros" vale "Gorras", "Pilusos" o "Sombreros"; en las
+   * prendas queda vacío porque ahí la categoría ya alcanza.
+   */
+  familia: string;
   molde: Molde;
   precio: number;
   costo: number; // precio de costo (para calcular ganancia)

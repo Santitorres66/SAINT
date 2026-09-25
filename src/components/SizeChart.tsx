@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MOLDE_POR_DEFECTO, tablaTallesDe } from "@/lib/constants";
+import { tablaTallesDe } from "@/lib/constants";
 
 /**
  * Tabla de talles del producto (medidas de la prenda), en un modal elegante
@@ -15,7 +15,7 @@ export default function SizeChart({
   categoria: string;
   molde?: string;
 }) {
-  const tabla = tablaTallesDe(categoria, molde ?? MOLDE_POR_DEFECTO);
+  const tabla = tablaTallesDe(categoria, molde ?? "");
   const [open, setOpen] = useState(false);
 
   if (!tabla) return null;

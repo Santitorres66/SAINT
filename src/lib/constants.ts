@@ -1,34 +1,66 @@
 import type { Categoria, EstadoProduccion, Molde } from "./types";
 
-/** Categorías con etiqueta legible (para selects y filtros). */
+/**
+ * Categorías con etiqueta legible (para selects y filtros).
+ *
+ * "crop" ya no está: los crops pasaron a ser un tipo de remera. La etiqueta de
+ * "gorra" dice "Gorras y sombreros" porque ahí adentro conviven gorras,
+ * pilusos y sombreros; el valor guardado sigue siendo "gorra".
+ */
 export const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: "buzo", label: "Buzos" },
   { value: "remera", label: "Remeras" },
-  { value: "crop", label: "Crops" },
   { value: "canguro", label: "Canguros" },
-  { value: "gorra", label: "Gorras" },
+  { value: "gorra", label: "Gorras y sombreros" },
 ];
 
-/** El molde de lo que ya estaba cargado antes de que existiera el campo. */
-export const MOLDE_POR_DEFECTO: Molde = "oversize";
+/**
+ * Familias: el nivel intermedio, cuando una categoría lo necesita.
+ *
+ * "Gorras y sombreros" no se divide en tipos de una: primero están las gorras,
+ * los pilusos y los sombreros, y recién adentro de las gorras viven baseball,
+ * trucker y compañía. Las prendas no lo necesitan (un buzo es oversize o
+ * básico, y ahí termina), así que para ellas este nivel no existe y el
+ * formulario ni lo muestra.
+ */
+export const FAMILIAS_SUGERIDAS: Record<string, string[]> = {
+  gorra: ["Gorras", "Pilusos", "Sombreros"],
+};
+
+/** Las familias de una categoría. Vacío = esa categoría no usa el nivel. */
+export function familiasDe(categoria: string): string[] {
+  return FAMILIAS_SUGERIDAS[categoria] ?? [];
+}
+
+/** Si la categoría trabaja con familias (hoy: solo gorras y sombreros). */
+export function usaFamilias(categoria: string): boolean {
+  return familiasDe(categoria).length > 0;
+}
 
 /**
- * Moldes que el admin ofrece según la categoría.
+ * Tipos que el admin ofrece, según la categoría y —si la usa— la familia.
  *
  * Son sugerencias, no una lista cerrada: siempre se puede escribir uno nuevo.
  * Están para que el mismo modelo no termine cargado de tres formas distintas,
  * que es lo que rompe el agrupado del listado.
+ *
+ * La clave es `categoria` o `categoria:familia` (la familia, normalizada).
  */
 export const MOLDES_SUGERIDOS: Record<string, string[]> = {
-  remera: ["Oversize", "Básica", "Boxy", "Heavyweight"],
-  crop: ["Oversize", "Básica", "Boxy"],
-  buzo: ["Oversize", "Cuello redondo", "Media cierre"],
-  canguro: ["Oversize", "Clásico"],
-  gorra: ["Vintage", "Baseball", "Trucker"],
+  buzo: ["Oversize", "Básico"],
+  remera: ["Básica", "Oversize", "Crop"],
+  canguro: ["Oversize", "Básico"],
+  "gorra:gorras": ["Baseball", "Vintage", "Trucker", "Niño"],
+  // Los pilusos todavía no se subdividen; cuando pase, van acá.
+  "gorra:pilusos": [],
+  "gorra:sombreros": ["Australiano"],
 };
 
-/** Los moldes sugeridos de una categoría (vacío si no tiene). */
-export function moldesDe(categoria: string): string[] {
+/** Los tipos sugeridos para una categoría (y familia, si corresponde). */
+export function moldesDe(categoria: string, familia = ""): string[] {
+  if (usaFamilias(categoria)) {
+    return MOLDES_SUGERIDOS[`${categoria}:${claveMolde(familia)}`] ?? [];
+  }
   return MOLDES_SUGERIDOS[categoria] ?? [];
 }
 
@@ -53,16 +85,37 @@ export function claveMolde(molde: string): string {
  * capitalizadas ("Oversize"). Sin esto, el select del formulario no encontraría
  * su opción y se vería vacío al editar un producto que sí tiene tipo.
  */
-export function canonizarMolde(categoria: string, molde: string): string {
+export function canonizarMolde(
+  categoria: string,
+  molde: string,
+  familia = "",
+): string {
   const k = claveMolde(molde);
-  return moldesDe(categoria).find((m) => claveMolde(m) === k) ?? molde;
+  return moldesDe(categoria, familia).find((m) => claveMolde(m) === k) ?? molde;
 }
 
-/** Devuelve el molde como se muestra: sin espacios sobrantes, o un guión. */
+/** Lo mismo para la familia. */
+export function canonizarFamilia(categoria: string, familia: string): string {
+  const k = claveMolde(familia);
+  return familiasDe(categoria).find((f) => claveMolde(f) === k) ?? familia;
+}
+
+/** Lo que se muestra cuando un producto todavía no tiene tipo o familia. */
+export const SIN_CLASIFICAR = "Sin clasificar";
+
+/**
+ * El molde como se muestra. Vacío no es "—" sino "Sin clasificar": es algo
+ * pendiente de cargar, y el listado tiene que decirlo para que se vea.
+ */
 export function labelMolde(value: string): string {
   const v = (value ?? "").trim();
-  if (!v) return "—";
+  if (!v) return SIN_CLASIFICAR;
   return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
+/** La familia como se muestra. Misma idea que labelMolde. */
+export function labelFamilia(value: string): string {
+  return labelMolde(value);
 }
 
 /** Categoría de los ítems que no se pueden clasificar. */
@@ -403,32 +456,43 @@ export const TABLAS_TALLES: Record<string, TablaTalles> = {
   },
 };
 
-/** Qué tabla comparten las categorías: los crops usan la de remera, los
- *  canguros la de buzo. Las gorras no llevan tabla (no están acá). */
-const FAMILIA_DE_CATEGORIA: Record<string, string> = {
+/**
+ * Qué tabla de talles comparten las categorías: los canguros miden como los
+ * buzos. Las gorras no llevan tabla (no están acá).
+ *
+ * Ojo con el nombre: "línea" es la familia DE MEDIDAS, que no tiene nada que
+ * ver con la familia del producto (Gorras / Pilusos / Sombreros).
+ */
+const LINEA_DE_CATEGORIA: Record<string, string> = {
   remera: "remera",
+  // "crop" ya no es una categoría, pero si quedara alguno sin migrar igual
+  // tiene que encontrar su tabla.
   crop: "remera",
   buzo: "buzo",
   canguro: "buzo",
 };
 
+/** El molde con el que se busca la tabla cuando el producto no tiene la suya. */
+const MOLDE_TALLES_FALLBACK = "oversize";
+
 /**
  * Devuelve la tabla de talles de un producto según su categoría y su molde.
  *
- * Si esa familia no tiene tabla para el molde pedido (hoy: un buzo marcado como
- * básico) cae en la del molde por defecto antes que no mostrar nada.
+ * Si esa línea no tiene tabla para el molde pedido (un buzo "Básico", o una
+ * remera sin clasificar) cae en la del molde por defecto antes que no mostrar
+ * nada: una tabla aproximada ayuda más que ninguna.
  */
 export function tablaTallesDe(
   categoria: string,
-  molde: string = MOLDE_POR_DEFECTO,
+  molde: string = "",
 ): TablaTalles | null {
-  const familia = FAMILIA_DE_CATEGORIA[categoria];
-  if (!familia) return null;
+  const linea = LINEA_DE_CATEGORIA[categoria];
+  if (!linea) return null;
   // Las tablas se indexan en minúscula y sin tildes; el molde se guarda como
   // se escribió ("Básica"), así que se normaliza antes de buscar.
   return (
-    TABLAS_TALLES[`${familia}_${claveMolde(molde)}`] ??
-    TABLAS_TALLES[`${familia}_${MOLDE_POR_DEFECTO}`] ??
+    TABLAS_TALLES[`${linea}_${claveMolde(molde)}`] ??
+    TABLAS_TALLES[`${linea}_${MOLDE_TALLES_FALLBACK}`] ??
     null
   );
 }

@@ -14,10 +14,13 @@ import type {
 } from "@/lib/types";
 import {
   CATEGORIAS,
-  MOLDE_POR_DEFECTO,
+  SIN_CLASIFICAR,
+  canonizarFamilia,
   canonizarMolde,
   claveMolde,
+  familiasDe,
   moldesDe,
+  usaFamilias,
   TALLES_SUGERIDOS,
   COLORES_SUGERIDOS,
 } from "@/lib/constants";
@@ -62,22 +65,49 @@ export default function ProductForm({
   const [categoria, setCategoria] = useState<Categoria>(
     initial?.categoria ?? "buzo",
   );
+  /* Familia: el nivel intermedio. Solo lo usan las categorías que lo tienen
+     definido (hoy, gorras y sombreros); en el resto ni se muestra. */
+  const [familia, setFamilia] = useState(() =>
+    initial ? canonizarFamilia(initial.categoria, initial.familia ?? "") : "",
+  );
   const [molde, setMolde] = useState<Molde>(() =>
     initial
-      ? canonizarMolde(initial.categoria, initial.molde)
-      : MOLDE_POR_DEFECTO,
+      ? canonizarMolde(
+          initial.categoria,
+          initial.molde,
+          initial.familia ?? "",
+        )
+      : "",
   );
-  /* El tipo se sugiere según la categoría, pero se puede escribir uno nuevo:
-     los modelos cambian más seguido de lo que conviene tocar una lista fija.
-     `otroTipo` es el modo "escribirlo a mano". */
-  const sugeridos = moldesDe(categoria);
+
+  const conFamilia = usaFamilias(categoria);
+  const familiasSugeridas = familiasDe(categoria);
+  /* El tipo se sugiere según la categoría (y la familia, cuando hay), pero se
+     puede escribir uno nuevo: los modelos cambian más seguido de lo que
+     conviene tocar una lista fija. `otroTipo` es el modo "escribirlo a mano". */
+  const sugeridos = moldesDe(categoria, familia);
   const [otroTipo, setOtroTipo] = useState(
     () =>
       Boolean(initial?.molde) &&
-      !moldesDe(initial!.categoria).some(
+      !moldesDe(initial!.categoria, initial!.familia ?? "").some(
         (m) => claveMolde(m) === claveMolde(initial!.molde),
       ),
   );
+
+  /* Al cambiar de categoría o de familia, el tipo elegido puede no existir en
+     el destino (un "Trucker" no es un tipo de buzo). Se suelta en vez de
+     guardar algo que no corresponde. */
+  function cambiarCategoria(nueva: Categoria) {
+    setCategoria(nueva);
+    setFamilia("");
+    setMolde("");
+    setOtroTipo(false);
+  }
+  function cambiarFamilia(nueva: string) {
+    setFamilia(nueva);
+    setMolde("");
+    setOtroTipo(false);
+  }
   const [precio, setPrecio] = useState(String(initial?.precio ?? ""));
   const [costo, setCosto] = useState(String(initial?.costo ?? ""));
   // Stock por variante (talle + color). Clave: `${talle}|||${color}`
@@ -173,7 +203,8 @@ export default function ProductForm({
     const input: ProductInput = {
       nombre,
       categoria,
-      molde: molde.trim() || MOLDE_POR_DEFECTO,
+      familia: conFamilia ? familia.trim() : "",
+      molde: molde.trim(),
       precio: Number(precio),
       costo: Number(costo) || 0,
       stock: totalStock,
@@ -241,7 +272,7 @@ export default function ProductForm({
           <select
             id="categoria"
             value={categoria}
-            onChange={(e) => setCategoria(e.target.value as Categoria)}
+            onChange={(e) => cambiarCategoria(e.target.value as Categoria)}
             className={inputClase}
           >
             {CATEGORIAS.map((c) => (
@@ -252,9 +283,40 @@ export default function ProductForm({
           </select>
         </div>
 
+        {conFamilia && (
+          <div>
+            <label htmlFor="familia" className={labelClase}>
+              Familia *
+            </label>
+            <select
+              id="familia"
+              value={familia}
+              onChange={(e) => cambiarFamilia(e.target.value)}
+              className={inputClase}
+            >
+              <option value="">{SIN_CLASIFICAR}</option>
+              {/* Lo guardado puede no estar entre las sugeridas: se agrega
+                  para no pisarlo sin querer al abrir el formulario. */}
+              {familia !== "" &&
+                !familiasSugeridas.some(
+                  (f) => claveMolde(f) === claveMolde(familia),
+                ) && <option value={familia}>{familia}</option>}
+              {familiasSugeridas.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-sm text-neutral-500">
+              Gorras, pilusos y sombreros son familias distintas dentro de la
+              misma categoría.
+            </p>
+          </div>
+        )}
+
         <div>
           <label htmlFor="molde" className={labelClase}>
-            Tipo *
+            Tipo
           </label>
           {otroTipo ? (
             <div className="flex gap-2">
@@ -269,7 +331,7 @@ export default function ProductForm({
                 type="button"
                 onClick={() => {
                   setOtroTipo(false);
-                  setMolde(sugeridos[0] ?? MOLDE_POR_DEFECTO);
+                  setMolde(sugeridos[0] ?? "");
                 }}
                 className="shrink-0 rounded-lg border border-neutral-300 px-4 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100"
               >
@@ -291,9 +353,11 @@ export default function ProductForm({
               {/* El valor guardado puede no estar entre los sugeridos (venía de
                   antes, o lo escribió otra persona): se agrega para no pisarlo
                   sin querer al abrir el formulario. */}
-              {!sugeridos.some((m) => claveMolde(m) === claveMolde(molde)) && (
-                <option value={molde}>{molde}</option>
-              )}
+              <option value="">{SIN_CLASIFICAR}</option>
+              {molde !== "" &&
+                !sugeridos.some((m) => claveMolde(m) === claveMolde(molde)) && (
+                  <option value={molde}>{molde}</option>
+                )}
               {sugeridos.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -303,8 +367,9 @@ export default function ProductForm({
             </select>
           )}
           <p className="mt-1.5 text-sm text-neutral-500">
-            Agrupa el producto en el listado y define qué tabla de talles ve el
-            cliente en la web.
+            {conFamilia && !familia
+              ? "Elegí primero la familia y después el tipo."
+              : "Agrupa el producto en el listado y define qué tabla de talles ve el cliente en la web."}
           </p>
         </div>
 
