@@ -5,7 +5,8 @@
 --
 -- Tres cosas, en orden:
 --   1) Se agrega `familia`, el nivel del medio (Gorras / Pilusos / Sombreros).
---   2) Los crops dejan de ser categoría y pasan a ser un tipo de remera.
+--   2) Se retiran dos categorías: los crops pasan a ser un tipo de remera y
+--      los canguros pasan a cargarse como buzos.
 --   3) Se clasifica lo que ya está cargado leyendo el NOMBRE del producto.
 --
 -- El paso 3 es el que conviene mirar con atención: adivina a partir del
@@ -21,11 +22,21 @@ alter table public.products
   add column if not exists familia text not null default '';
 
 
--- 2) LOS CROPS SON UN TIPO DE REMERA -------------------------------------
+-- 2) CATEGORÍAS QUE SE RETIRAN -------------------------------------------
+-- Los crops pasan a ser un tipo de remera.
 update public.products
    set categoria = 'remera',
        molde      = 'Crop'
  where categoria = 'crop';
+
+-- Los canguros se cargan como buzos. El tipo se deja vacío a propósito: lo
+-- resuelve el paso 3.b leyendo el nombre, igual que al resto de los buzos.
+-- El nombre del producto no se toca, así "Canguro Oversize" sigue diciendo
+-- que es un canguro.
+update public.products
+   set categoria = 'buzo',
+       molde      = ''
+ where categoria = 'canguro';
 
 
 -- 3) CLASIFICACIÓN INICIAL POR NOMBRE ------------------------------------
@@ -92,18 +103,6 @@ update public.products
                end
  where categoria = 'remera'
    and molde = '';
-
--- 3.d) Canguros.
-update public.products
-   set molde = case
-                 when nombre ilike '%oversize%' then 'Oversize'
-                 when nombre ilike '%basic%'
-                   or nombre ilike '%básic%'  then 'Básico'
-                 else ''
-               end
- where categoria = 'canguro'
-   and molde = '';
-
 
 -- 4) CÓMO QUEDÓ ----------------------------------------------------------
 -- Esta consulta no cambia nada: es para mirar el resultado antes de ir al

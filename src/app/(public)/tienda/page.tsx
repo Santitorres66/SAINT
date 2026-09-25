@@ -8,7 +8,7 @@ import { labelCategoria } from "@/lib/constants";
 export const metadata: Metadata = {
   title: "Tienda",
   description:
-    "Explorá todos los básicos de SAINT: buzos, remeras oversized, crops, canguros y gorras. Únicos a través del bordado personalizado.",
+    "Explorá todos los básicos de SAINT: buzos, remeras, crop tops, gorras y sombreros. Únicos a través del bordado personalizado.",
 };
 
 /** Los params de la URL llegan como string; acá se vuelven filtros usables. */

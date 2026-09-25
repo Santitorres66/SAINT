@@ -3,16 +3,32 @@ import type { Categoria, EstadoProduccion, Molde } from "./types";
 /**
  * Categorías con etiqueta legible (para selects y filtros).
  *
- * "crop" ya no está: los crops pasaron a ser un tipo de remera. La etiqueta de
- * "gorra" dice "Gorras y sombreros" porque ahí adentro conviven gorras,
- * pilusos y sombreros; el valor guardado sigue siendo "gorra".
+ * Quedaron cuatro. "crop" y "canguro" salieron: los crops son un tipo de
+ * remera y los canguros se cargan como buzos. La etiqueta de "gorra" dice
+ * "Gorras y sombreros" porque ahí adentro conviven gorras, pilusos y
+ * sombreros; el valor guardado sigue siendo "gorra".
  */
 export const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: "buzo", label: "Buzos" },
   { value: "remera", label: "Remeras" },
-  { value: "canguro", label: "Canguros" },
   { value: "gorra", label: "Gorras y sombreros" },
 ];
+
+/**
+ * Categorías que ya no se ofrecen pero pueden seguir guardadas en algún
+ * producto viejo. Se las nombra igual que siempre: si alguna quedó sin migrar,
+ * el admin tiene que mostrarla como "Canguros" y no como un slug pelado.
+ */
+const ETIQUETAS_LEGADAS: Record<string, string> = {
+  crop: "Crops",
+  canguro: "Canguros",
+};
+
+/** A qué categoría vigente corresponde una que salió de circulación. */
+const ALIAS_LEGADOS: Record<string, string> = {
+  crop: "remera",
+  canguro: "buzo",
+};
 
 /**
  * Familias: el nivel intermedio, cuando una categoría lo necesita.
@@ -49,7 +65,6 @@ export function usaFamilias(categoria: string): boolean {
 export const MOLDES_SUGERIDOS: Record<string, string[]> = {
   buzo: ["Oversize", "Básico"],
   remera: ["Básica", "Oversize", "Crop"],
-  canguro: ["Oversize", "Básico"],
   "gorra:gorras": ["Baseball", "Vintage", "Trucker", "Niño"],
   // Los pilusos todavía no se subdividen; cuando pase, van acá.
   "gorra:pilusos": [],
@@ -124,7 +139,11 @@ export const CATEGORIA_OTROS = "otros";
 /** Devuelve la etiqueta legible de una categoría. */
 export function labelCategoria(value: string): string {
   if (value === CATEGORIA_OTROS) return "Otros";
-  return CATEGORIAS.find((c) => c.value === value)?.label ?? value;
+  return (
+    CATEGORIAS.find((c) => c.value === value)?.label ??
+    ETIQUETAS_LEGADAS[value] ??
+    value
+  );
 }
 
 /**
@@ -144,7 +163,13 @@ export function categoriaDeItem(
 
   const nombre = (item.nombre ?? "").toLowerCase();
   const porNombre = CATEGORIAS.find((c) => nombre.includes(c.value));
-  return porNombre?.value ?? CATEGORIA_OTROS;
+  if (porNombre) return porNombre.value;
+
+  // Un ítem viejo escrito a mano puede decir "canguro" o "crop", que ya no son
+  // categorías: se los manda a la que los absorbió para que las ventas
+  // históricas no se caigan todas en "Otros".
+  const legado = Object.keys(ALIAS_LEGADOS).find((k) => nombre.includes(k));
+  return legado ? ALIAS_LEGADOS[legado] : CATEGORIA_OTROS;
 }
 
 /** Talles sugeridos en el admin (se pueden agregar otros a mano). */

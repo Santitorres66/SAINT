@@ -38,8 +38,11 @@ export const metadata: Metadata = {
     "bordado personalizado",
     "buzos",
     "remeras oversized",
+    "crop tops",
     "canguros",
     "gorras",
+    "pilusos",
+    "sombreros",
     "Argentina",
   ],
   openGraph: {
