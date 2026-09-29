@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AnaliticaVentas from "@/components/admin/AnaliticaVentas";
+import DescargarReportes from "@/components/admin/DescargarReportes";
 import {
   getDashboardStats,
   getVentasParaAnalitica,
@@ -36,6 +37,9 @@ export default async function TableroPage() {
         compras={compras}
         categoriaPorProducto={categoriaPorProducto}
       />
+
+      {/* Reportes en Excel: ventas, compras y stock */}
+      <DescargarReportes />
 
       {/* Cobranza: facturar no es cobrar. Estos números separan lo que
           vendiste de la plata que realmente entró. */}
