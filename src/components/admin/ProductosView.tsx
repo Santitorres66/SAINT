@@ -12,6 +12,7 @@ import {
   labelCategoria,
   labelFamilia,
   labelMolde,
+  ordenarTalles,
   SIN_CLASIFICAR,
   usaFamilias,
 } from "@/lib/constants";
@@ -23,6 +24,15 @@ import {
 } from "@/app/admin/actions";
 
 type Orden = "precio_desc" | "precio_asc" | "nombre" | "stock_asc";
+
+/**
+ * A partir de acá un talle se marca en ámbar: queda stock, pero es el momento
+ * de reponer. Debajo de esto una venta deja el talle en cero.
+ */
+const STOCK_BAJO = 2;
+
+/** El stock de un talle, con el detalle por color para el tooltip. */
+type TalleStock = { talle: string; stock: number; detalle: string };
 
 /** Lo que se muestra en la cabecera de cualquier nivel del listado. */
 type Totales = { cantidad: number; unidades: number; valorizado: number };
@@ -73,6 +83,8 @@ export default function ProductosView({
   const [fProducto, setFProducto] = useState("");
   const [fColor, setFColor] = useState("");
   const [fTalle, setFTalle] = useState("");
+  /** Solo productos a los que les falta algún talle: la vista de recompra. */
+  const [soloFaltantes, setSoloFaltantes] = useState(false);
   const [orden, setOrden] = useState<Orden>("precio_desc");
 
   /* Qué está desplegado. Categorías y familias arrancan abiertas (se ven los
@@ -103,6 +115,46 @@ export default function ProductosView({
     return m;
   }, [variantes]);
 
+  /**
+   * El stock abierto talle por talle.
+   *
+   * La columna "Talles" sola no alcanza para decidir una recompra: un producto
+   * con 2 unidades repartidas entre cuatro talles está prácticamente agotado,
+   * pero el total lo muestra igual que uno con 2 del mismo talle. Arranca de
+   * `p.talles` para que un talle sin variante cargada aparezca igual —en cero,
+   * que es justo el dato que se busca— y le suma las variantes de cada talle.
+   */
+  function desgloseTalles(p: Product): TalleStock[] {
+    const vs = (variantesPorProd.get(p.id) ?? []).filter(
+      (v) => (!fColor || v.color === fColor) && (!fTalle || v.talle === fTalle),
+    );
+    const porTalle = new Map<string, ProductVariante[]>();
+    (fTalle ? p.talles.filter((t) => t === fTalle) : p.talles).forEach((t) =>
+      porTalle.set(t, []),
+    );
+    vs.forEach((v) => porTalle.set(v.talle, [...(porTalle.get(v.talle) ?? []), v]));
+
+    return ordenarTalles([...porTalle.keys()]).map((talle) => {
+      const delTalle = porTalle.get(talle) ?? [];
+      return {
+        talle,
+        stock: delTalle.reduce((a, v) => a + v.stock, 0),
+        // Solo tiene sentido abrir por color si el producto tiene más de uno.
+        detalle:
+          p.colores.length > 1
+            ? delTalle
+                .map((v) => `${v.color || "General"}: ${v.stock}`)
+                .join(" · ")
+            : "",
+      };
+    });
+  }
+
+  /** Le falta algún talle (alguno en cero). */
+  function tieneFaltante(p: Product): boolean {
+    return desgloseTalles(p).some((t) => t.stock === 0);
+  }
+
   const productosUnicos = [...new Set(products.map((p) => p.nombre))].sort();
   const coloresUnicos = [...new Set(products.flatMap((p) => p.colores))].sort();
   const tallesUnicos = [...new Set(products.flatMap((p) => p.talles))].sort();
@@ -114,6 +166,7 @@ export default function ProductosView({
       if (fProducto && p.nombre !== fProducto) return false;
       if (fColor && !p.colores.includes(fColor)) return false;
       if (fTalle && !p.talles.includes(fTalle)) return false;
+      if (soloFaltantes && !tieneFaltante(p)) return false;
       return true;
     });
     return r.sort((a, b) =>
@@ -125,9 +178,13 @@ export default function ProductosView({
             ? a.stock - b.stock
             : a.nombre.localeCompare(b.nombre),
     );
-  }, [products, busca, fProducto, fColor, fTalle, orden]);
+    // `tieneFaltante` se recalcula con los mismos datos que las dependencias.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, busca, fProducto, fColor, fTalle, soloFaltantes, orden]);
 
-  const hayFiltros = Boolean(busca || fProducto || fColor || fTalle);
+  const hayFiltros = Boolean(
+    busca || fProducto || fColor || fTalle || soloFaltantes,
+  );
 
   // Stock a mostrar según los filtros: si filtrás color/talle, muestra el
   // stock de esa variante; si no, el total del producto.
@@ -399,6 +456,21 @@ export default function ProductosView({
             </option>
           ))}
         </select>
+        <label
+          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
+            soloFaltantes
+              ? "border-red-300 bg-red-50 text-red-700"
+              : "border-neutral-300 text-neutral-600 hover:bg-neutral-100"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={soloFaltantes}
+            onChange={(e) => setSoloFaltantes(e.target.checked)}
+            className="h-4 w-4 accent-neutral-900"
+          />
+          Con talles en 0
+        </label>
         <select
           value={orden}
           onChange={(e) => setOrden(e.target.value as Orden)}
@@ -417,12 +489,29 @@ export default function ProductosView({
               setFProducto("");
               setFColor("");
               setFTalle("");
+              setSoloFaltantes(false);
             }}
             className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100"
           >
             Limpiar filtros
           </button>
         )}
+      </div>
+
+      {/* Qué significan los colores de los chips de talle. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm border border-red-200 bg-red-50" />
+          Sin stock
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm border border-amber-200 bg-amber-50" />
+          Queda poco ({STOCK_BAJO} o menos)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm border border-neutral-200 bg-neutral-50" />
+          Con stock
+        </span>
       </div>
 
       {error && (
@@ -645,14 +734,16 @@ export default function ProductosView({
                               : "ml-5 border-l-2 border-neutral-200"
                           }`}
                         >
-                          <table className="w-full min-w-[820px] text-sm">
+                          <table className="w-full min-w-[900px] text-sm">
                             <thead>
                               <tr className="border-b border-neutral-100 text-left text-xs uppercase tracking-wide text-neutral-400">
                                 <th className="px-5 py-2 font-medium">
                                   Producto
                                 </th>
                                 <th className="px-4 py-2 font-medium">Color</th>
-                                <th className="px-4 py-2 font-medium">Talles</th>
+                                <th className="px-4 py-2 font-medium">
+                                  Talles · stock
+                                </th>
                                 <th className="px-4 py-2 text-right font-medium">
                                   Precio
                                 </th>
@@ -692,8 +783,8 @@ export default function ProductosView({
                                   <td className="px-4 py-3 text-neutral-700">
                                     {p.colores.join(", ") || "—"}
                                   </td>
-                                  <td className="px-4 py-3 text-neutral-700">
-                                    {p.talles.join(", ") || "—"}
+                                  <td className="px-4 py-3">
+                                    <TallesCelda talles={desgloseTalles(p)} />
                                   </td>
 
                                   {/* Precio editable en la fila */}
@@ -862,6 +953,39 @@ export default function ProductosView({
  * Es la misma en los dos niveles que agrupan (familia y tipo): lo único que
  * cambia es a qué lista de productos se aplica.
  */
+/**
+ * El stock de cada talle, en chips.
+ *
+ * El color hace el trabajo: en una lista larga lo que se busca es el rojo, no
+ * leer número por número. Rojo es "no hay", ámbar es "queda poco, encargalo",
+ * gris es "está bien".
+ */
+function TallesCelda({ talles }: { talles: TalleStock[] }) {
+  if (talles.length === 0)
+    return <span className="text-neutral-400">—</span>;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {talles.map((t) => (
+        <span
+          key={t.talle}
+          title={t.detalle || undefined}
+          className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium ${
+            t.stock === 0
+              ? "border-red-200 bg-red-50 text-red-700"
+              : t.stock <= STOCK_BAJO
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-neutral-200 bg-neutral-50 text-neutral-700"
+          }`}
+        >
+          <span>{t.talle || "Único"}</span>
+          <span className="tabular-nums opacity-70">{t.stock}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function PanelPrecio({
   etiqueta,
   valor,
