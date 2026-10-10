@@ -298,6 +298,8 @@ type Venta = {
   fecha_cobro: string | null;
   items: OrderItem[];
   orden: string;
+  /** "Servicio" o "Producto": de qué se cobró, para poder abrirlo aparte. */
+  tipo: string;
   /** Costo de la orden de producción, si la venta la cerró. */
   costo_produccion: number | null;
   notas: string;
@@ -336,11 +338,16 @@ export async function reporteVentas(rango: RangoReporte) {
       if (hasta) q = q.lte("fecha", hasta);
       return q.order("fecha", { ascending: false }).range(a, b);
     }, "cobros"),
-    traerTodo<{ numero: number; venta_id: string; costo_total: number }>(
+    traerTodo<{
+      numero: number;
+      venta_id: string;
+      costo_total: number;
+      es_servicio: boolean;
+    }>(
       (a, b) =>
         supabase
           .from("ordenes_produccion")
-          .select("numero, venta_id, costo_total")
+          .select("numero, venta_id, costo_total, es_servicio")
           .not("venta_id", "is", null)
           .range(a, b),
       "ordenes_produccion",
@@ -371,6 +378,7 @@ export async function reporteVentas(rango: RangoReporte) {
       fecha_cobro: o.created_at,
       items: o.items ?? [],
       orden: "",
+      tipo: "Producto",
       costo_produccion: null,
       notas: "",
     })),
@@ -400,6 +408,7 @@ export async function reporteVentas(rango: RangoReporte) {
         fecha_cobro: v.fecha_cobro,
         items: v.items ?? [],
         orden: orden ? formatNumeroOrden(orden.numero) : "",
+        tipo: orden?.es_servicio ? "Servicio" : "Producto",
         costo_produccion: orden ? n(orden.costo_total) : null,
         notas: v.notas ?? "",
       };
@@ -447,6 +456,7 @@ export async function reporteVentas(rango: RangoReporte) {
         medio_pago: v.medio_pago,
         estado_cobro: labelCobro(v.estado_cobro),
         cobrado: v.estado_cobro === "cobrado" ? "Sí" : "No",
+        tipo: v.tipo,
         orden: v.orden,
         notas: v.notas,
       });
@@ -501,6 +511,7 @@ export async function reporteVentas(rango: RangoReporte) {
       { titulo: "Medio de pago", clave: "medio_pago", ancho: 15 },
       { titulo: "Estado de cobro", clave: "estado_cobro", ancho: 18 },
       { titulo: "¿Cobrado?", clave: "cobrado", ancho: 10 },
+      { titulo: "Tipo", clave: "tipo", ancho: 10 },
       { titulo: "Orden de producción", clave: "orden", ancho: 12 },
       { titulo: "Notas", clave: "notas", ancho: 30 },
     ],
@@ -524,6 +535,7 @@ export async function reporteVentas(rango: RangoReporte) {
       { titulo: "Estado de cobro", clave: "estado_cobro", ancho: 18 },
       { titulo: "Fecha de cobro", clave: "fecha_cobro", tipo: "fecha" },
       { titulo: "Medio de pago", clave: "medio_pago", ancho: 15 },
+      { titulo: "Tipo", clave: "tipo", ancho: 10 },
       { titulo: "Orden de producción", clave: "orden", ancho: 12 },
       { titulo: "Notas", clave: "notas", ancho: 30 },
     ],
@@ -550,6 +562,7 @@ export async function reporteVentas(rango: RangoReporte) {
       estado_cobro: labelCobro(v.estado_cobro),
       fecha_cobro: fechaAR(v.fecha_cobro),
       medio_pago: v.medio_pago,
+      tipo: v.tipo,
       orden: v.orden,
       notas: v.notas,
     })),

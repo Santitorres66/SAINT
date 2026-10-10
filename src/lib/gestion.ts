@@ -131,14 +131,19 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
       // cada venta. Consulta aparte: el vínculo vive en `ordenes_produccion`.
       supabase
         .from("ordenes_produccion")
-        .select("id, numero, venta_id")
+        .select("id, numero, venta_id, es_servicio")
         .not("venta_id", "is", null),
     ]);
 
   const ordenPorVenta = new Map(
-    ((ordenes as { id: string; numero: number; venta_id: string }[]) ?? []).map(
-      (o) => [o.venta_id, o],
-    ),
+    (
+      (ordenes as {
+        id: string;
+        numero: number;
+        venta_id: string;
+        es_servicio: boolean;
+      }[]) ?? []
+    ).map((o) => [o.venta_id, o]),
   );
 
   const online: VentaUnificada[] = ((orders as Order[]) ?? []).map((o) => ({
@@ -158,6 +163,8 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
     cobros: [],
     orden_numero: null,
     orden_id: null,
+    // Las ventas web son siempre de catálogo: no hay servicios en la tienda.
+    orden_es_servicio: false,
   }));
 
   type VentaRow = VentaManual & { cobros: Cobro[] | null };
@@ -185,6 +192,7 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
     ),
     orden_numero: ordenPorVenta.get(v.id)?.numero ?? null,
     orden_id: ordenPorVenta.get(v.id)?.id ?? null,
+    orden_es_servicio: ordenPorVenta.get(v.id)?.es_servicio ?? false,
   }));
 
   return [...online, ...manual].sort(

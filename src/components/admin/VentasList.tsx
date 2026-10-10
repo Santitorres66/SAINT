@@ -398,12 +398,19 @@ export default function VentasList({
                   {formatFecha(v.fecha)}
                 </p>
                 {v.orden_id && v.orden_numero !== null && (
-                  <Link
-                    href={`/admin/produccion/${v.orden_id}`}
-                    className="mt-1 inline-block font-mono text-xs text-neutral-500 hover:text-neutral-900 hover:underline"
-                  >
-                    🧵 Orden {formatNumeroOrden(v.orden_numero)}
-                  </Link>
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <Link
+                      href={`/admin/produccion/${v.orden_id}`}
+                      className="inline-block font-mono text-xs text-neutral-500 hover:text-neutral-900 hover:underline"
+                    >
+                      🧵 Orden {formatNumeroOrden(v.orden_numero)}
+                    </Link>
+                    {v.orden_es_servicio && (
+                      <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
+                        Servicio
+                      </span>
+                    )}
+                  </span>
                 )}
               </div>
 

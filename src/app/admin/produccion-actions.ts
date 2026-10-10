@@ -32,6 +32,7 @@ type NuevaOrdenInput = {
   talle: string;
   color: string;
   cantidad: number;
+  es_servicio: boolean;
   bordado_descripcion: string;
   bordado_ubicacion: string;
   bordado_tamano: string;
@@ -117,8 +118,15 @@ export async function createOrdenProduccion(
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
 
-  if (!input.prenda?.trim() && !input.product_id)
+  // Un servicio puede no tener prenda propia (la trae el cliente), así que lo
+  // que no puede faltar es la descripción del trabajo: sin eso la orden no
+  // dice qué hay que bordar.
+  if (input.es_servicio) {
+    if (!input.bordado_descripcion?.trim() && !input.prenda?.trim())
+      return { error: "Describí el trabajo de bordado." };
+  } else if (!input.prenda?.trim() && !input.product_id) {
     return { error: "Indicá la prenda (elegí un producto o escribila)." };
+  }
 
   // Verificamos el stock de la VARIANTE exacta (talle + color)
   const cant = input.cantidad || 1;
@@ -176,6 +184,7 @@ export async function createOrdenProduccion(
       talle: input.talle?.trim() ?? "",
       color: input.color?.trim() ?? "",
       cantidad: input.cantidad || 1,
+      es_servicio: input.es_servicio ?? false,
       bordado_descripcion: input.bordado_descripcion?.trim() ?? "",
       bordado_ubicacion: input.bordado_ubicacion?.trim() ?? "",
       bordado_tamano: input.bordado_tamano?.trim() ?? "",
@@ -226,6 +235,7 @@ type EditarOrdenInput = {
   cliente: string;
   cliente_id: string | null;
   fecha: string;
+  es_servicio: boolean;
   bordado_descripcion: string;
   bordado_ubicacion: string;
   bordado_tamano: string;
@@ -295,6 +305,7 @@ export async function updateOrdenProduccion(
       cliente: input.cliente?.trim() ?? "",
       cliente_id: input.cliente_id,
       fecha: input.fecha || new Date().toISOString(),
+      es_servicio: input.es_servicio ?? false,
       bordado_descripcion: input.bordado_descripcion?.trim() ?? "",
       bordado_ubicacion: input.bordado_ubicacion?.trim() ?? "",
       bordado_tamano: input.bordado_tamano?.trim() ?? "",

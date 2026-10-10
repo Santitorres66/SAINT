@@ -36,10 +36,23 @@ export default async function NuevaVentaPage({
           cliente: ordenRow.cliente,
           cliente_id: ordenRow.cliente_id,
           product_id: ordenRow.product_id,
-          nombre: ordenRow.product_nombre || ordenRow.prenda || "",
+          // Un servicio puede no tener prenda: ahí lo que se vende es el
+          // trabajo, y sin esto la línea de la venta nacería sin nombre.
+          nombre:
+            ordenRow.product_nombre ||
+            ordenRow.prenda ||
+            (ordenRow.es_servicio
+              ? [
+                  "Servicio de bordado",
+                  ordenRow.bordado_descripcion,
+                ]
+                  .filter(Boolean)
+                  .join(" — ")
+              : ""),
           talle: ordenRow.talle,
           color: ordenRow.color,
           cantidad: ordenRow.cantidad,
+          es_servicio: ordenRow.es_servicio,
           costo_total: Number(ordenRow.costo_total) || 0,
         }
       : undefined;

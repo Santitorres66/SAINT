@@ -36,6 +36,8 @@ export type OrdenPrecargada = {
   talle: string;
   color: string;
   cantidad: number;
+  /** La orden es un servicio de bordado, no la venta de una prenda propia. */
+  es_servicio: boolean;
   /** Costo total de producción — se muestra como referencia para el precio. */
   costo_total: number;
 };
@@ -224,8 +226,10 @@ export default function VentaManualForm({
             <span className="font-mono">{formatNumeroOrden(orden.numero)}</span>
           </p>
           <p className="mt-1 text-sm text-purple-800">
-            Al guardarla, la orden pasa a <strong>Vendido</strong>. El stock no
-            se toca: esa prenda ya salió cuando se creó la orden.
+            Al guardarla, la orden pasa a <strong>Vendido</strong>.{" "}
+            {orden.es_servicio && !orden.product_id
+              ? "Es un servicio sobre una prenda que no es tuya, así que no hay stock que mover."
+              : "El stock no se toca: esa prenda ya salió cuando se creó la orden."}
           </p>
           {orden.costo_total > 0 && (
             <p className="mt-2 text-sm text-purple-800">

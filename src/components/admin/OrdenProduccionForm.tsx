@@ -62,6 +62,12 @@ export default function OrdenProduccionForm({
   const [fechaEntrega, setFechaEntrega] = useState(
     orden?.fecha_estimada_entrega?.slice(0, 10) ?? "",
   );
+  /**
+   * Servicio de bordado en vez de producción de una prenda propia. No tiene
+   * nada que ver con el stock —un servicio puede salir del catálogo o hacerse
+   * sobre la prenda del cliente—: lo que cambia es cómo se reporta el ingreso.
+   */
+  const [esServicio, setEsServicio] = useState(orden?.es_servicio ?? false);
   const [modelo, setModelo] = useState(""); // nombre del producto (o "__mano__")
   const [productId, setProductId] = useState("");
   const [prenda, setPrenda] = useState("");
@@ -219,6 +225,7 @@ export default function OrdenProduccionForm({
       cliente,
       cliente_id: clienteId || null,
       fecha,
+      es_servicio: esServicio,
       bordado_descripcion: bDescripcion,
       bordado_ubicacion: bUbicacion,
       bordado_tamano: bTamano,
@@ -274,6 +281,47 @@ export default function OrdenProduccionForm({
           {error}
         </p>
       )}
+
+      {/* TIPO DE ORDEN */}
+      <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-6">
+        <h2 className={h2}>Tipo de orden</h2>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              [false, "Prenda propia", "Sale de tu producción y se vende como producto."],
+              [true, "Servicio de bordado", "Le cobrás el trabajo al cliente."],
+            ] as const
+          ).map(([valor, titulo, detalle]) => (
+            <button
+              key={String(valor)}
+              type="button"
+              onClick={() => setEsServicio(valor)}
+              className={`flex-1 rounded-xl border px-4 py-3 text-left transition sm:flex-none sm:w-64 ${
+                esServicio === valor
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+              }`}
+            >
+              <span className="block text-sm font-medium">{titulo}</span>
+              <span
+                className={`mt-0.5 block text-xs ${
+                  esServicio === valor ? "text-neutral-300" : "text-neutral-500"
+                }`}
+              >
+                {detalle}
+              </span>
+            </button>
+          ))}
+        </div>
+        {esServicio && (
+          <p className="text-xs text-neutral-500">
+            La prenda es opcional: si la trae el cliente, dejala vacía y no se
+            toca tu stock. Si la ponés vos, elegila del catálogo y se descuenta
+            como en cualquier orden. El ingreso queda marcado como servicio en
+            los reportes.
+          </p>
+        )}
+      </section>
 
       {/* PEDIDO */}
       <section className="space-y-6 rounded-2xl border border-neutral-200 bg-white p-6">
@@ -381,7 +429,9 @@ export default function OrdenProduccionForm({
           <>
             {/* 1) Modelo (siempre trae lo que hay en stock) */}
             <div>
-              <label className={label}>Prenda</label>
+              <label className={label}>
+                {esServicio ? "Prenda sobre la que se borda" : "Prenda"}
+              </label>
               <Buscador
                 opciones={[
                   ...modelos.map((m) => ({
@@ -394,7 +444,11 @@ export default function OrdenProduccionForm({
                 value={modelo}
                 onSelect={(o) => elegirModelo(o?.value ?? "")}
                 placeholder="Buscá la prenda"
-                vacio="— Elegí la prenda —"
+                vacio={
+                  esServicio
+                    ? "— La trae el cliente —"
+                    : "— Elegí la prenda —"
+                }
               />
             </div>
           </>
@@ -694,7 +748,9 @@ export default function OrdenProduccionForm({
         <h2 className={h2}>Costos</h2>
         <div className="grid gap-4 sm:grid-cols-4">
           <div>
-            <label className={label}>Costo prenda</label>
+            <label className={label}>
+              {esServicio ? "Costo de materiales" : "Costo prenda"}
+            </label>
             <input
               type="number"
               min="0"

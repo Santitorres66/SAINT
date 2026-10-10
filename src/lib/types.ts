@@ -308,6 +308,8 @@ export interface VentaUnificada {
   cobros: Cobro[];
   /** N° de la orden de producción que la originó (para mostrar el vínculo). */
   orden_numero: number | null;
+  /** La orden que la originó era un servicio de bordado. */
+  orden_es_servicio: boolean;
   orden_id: string | null;
 }
 
@@ -367,6 +369,13 @@ export interface OrdenProduccion {
   talle: string;
   color: string;
   cantidad: number;
+  /**
+   * La orden es un servicio de bordado y no la producción de una prenda
+   * propia. Es independiente del stock: un servicio puede hacerse sobre una
+   * prenda del catálogo (descuenta) o sobre una que trae el cliente (no). Lo
+   * que cambia es cómo se reporta el ingreso.
+   */
+  es_servicio: boolean;
   bordado_descripcion: string;
   bordado_ubicacion: string;
   bordado_tamano: string;

@@ -74,6 +74,11 @@ export default async function DetalleOrdenPage({
           <span className={`rounded-full px-3 py-1 text-xs font-medium ${chip}`}>
             {labelEstado(orden.estado)}
           </span>
+          {orden.es_servicio && (
+            <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-800">
+              Servicio
+            </span>
+          )}
           {orden.prioridad !== "media" && (
             <span
               className={`rounded-full px-3 py-1 text-xs font-medium ${prioChip}`}
@@ -150,7 +155,14 @@ export default async function DetalleOrdenPage({
 
           {/* PRENDA */}
           <section className={cardClase}>
-            <h2 className={h2Clase}>Prenda</h2>
+            <h2 className={h2Clase}>
+              {orden.es_servicio ? "Prenda del trabajo" : "Prenda"}
+            </h2>
+            {orden.es_servicio && !orden.product_id && !orden.prenda && (
+              <p className="-mt-2 mb-4 text-sm text-neutral-500">
+                La prenda la puso el cliente: esta orden no movió stock.
+              </p>
+            )}
             <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Dato
                 label="Producto"

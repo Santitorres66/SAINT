@@ -85,9 +85,16 @@ function Tarjeta({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <p className="font-mono text-xs text-neutral-400">
-                {formatNumeroOrden(orden.numero)}
-              </p>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <p className="font-mono text-xs text-neutral-400">
+                  {formatNumeroOrden(orden.numero)}
+                </p>
+                {orden.es_servicio && (
+                  <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
+                    Servicio
+                  </span>
+                )}
+              </div>
               {prio && prio.value !== "media" && (
                 <span
                   className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${prio.chip}`}
@@ -97,7 +104,10 @@ function Tarjeta({
               )}
             </div>
             <p className="truncate text-sm font-medium text-neutral-900">
-              {orden.product_nombre || orden.prenda || "—"}
+              {orden.product_nombre ||
+                orden.prenda ||
+                (orden.es_servicio ? orden.bordado_descripcion : "") ||
+                "—"}
             </p>
             <p className="truncate text-xs text-neutral-500">
               {orden.bordado_descripcion || "Sin descripción"}
@@ -358,6 +368,7 @@ export default function ProduccionBoard({
       o.product_nombre,
       o.bordado_descripcion,
       o.pedido_referencia,
+      o.es_servicio ? "servicio" : "",
     ]
       .join(" ")
       .toLowerCase()
