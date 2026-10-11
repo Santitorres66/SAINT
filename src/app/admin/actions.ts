@@ -48,6 +48,49 @@ function validar(input: ProductInput): string | null {
   return null;
 }
 
+/**
+ * Busca un producto que sea el MISMO artículo que el que se está guardando.
+ *
+ * En este sistema un producto es modelo + color y lleva adentro todos sus
+ * talles. Si el mismo modelo y color quedan cargados dos veces —uno con el
+ * talle L y otro con el M—, cada formulario de compra o venta ve solo la
+ * mitad de los talles, porque está mirando uno de los dos registros. Es un
+ * problema silencioso: nada falla, simplemente faltan talles.
+ *
+ * Alcanza con que compartan UN color: ahí ya hay un modelo+color repetido.
+ */
+async function buscarDuplicado(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  input: ProductInput,
+  idPropio?: string,
+): Promise<string | null> {
+  const nombre = input.nombre.trim();
+  const colores = (input.colores ?? []).filter(Boolean);
+
+  let q = supabase.from("products").select("id, nombre, colores").ilike("nombre", nombre);
+  if (idPropio) q = q.neq("id", idPropio);
+  const { data } = await q;
+
+  for (const otro of (data as { id: string; colores: string[] | null }[]) ?? []) {
+    const suyos = (otro.colores ?? []).filter(Boolean);
+    // Sin colores cargados, el nombre solo ya identifica al artículo.
+    if (!colores.length && !suyos.length) return "";
+    const comunes = colores.filter((c) => suyos.includes(c));
+    if (comunes.length) return comunes.join(", ");
+  }
+  return null;
+}
+
+/** El mensaje que explica qué hacer en vez de crear el duplicado. */
+function errorDuplicado(nombre: string, colores: string): string {
+  const cual = colores ? `«${nombre}» en ${colores}` : `«${nombre}»`;
+  return (
+    `Ya existe ${cual}. Editá ese producto y agregale los talles que falten, ` +
+    `en vez de cargar uno nuevo: si quedan dos, cada compra y cada venta va a ` +
+    `ver solo la mitad de los talles.`
+  );
+}
+
 /** Crea un producto nuevo. */
 export async function createProduct(
   input: ProductInput,
@@ -58,6 +101,10 @@ export async function createProduct(
 
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const repetido = await buscarDuplicado(supabase, input);
+  if (repetido !== null)
+    return { error: errorDuplicado(input.nombre.trim(), repetido) };
 
   const total = variantes.reduce((a, v) => a + (v.stock || 0), 0);
 
@@ -126,6 +173,31 @@ export async function updateProduct(
 
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  /* Al editar el aviso solo corre si cambió la identidad del producto (su
+     nombre o sus colores): renombrar uno hasta chocar con otro deja el mismo
+     duplicado que crearlo de cero. Si no la tocaste, no se chequea nada, y es
+     importante que así sea: para unificar dos duplicados a mano hay que poder
+     abrir uno de ellos y agregarle los talles del otro: avisar ahí sería
+     trabarte justo en el arreglo. */
+  const { data: previo } = await supabase
+    .from("products")
+    .select("nombre, colores")
+    .eq("id", id)
+    .maybeSingle();
+
+  const mismoNombre =
+    (previo?.nombre ?? "").trim().toLowerCase() ===
+    input.nombre.trim().toLowerCase();
+  const mismosColores =
+    JSON.stringify((previo?.colores ?? []).filter(Boolean)) ===
+    JSON.stringify((input.colores ?? []).filter(Boolean));
+
+  if (!previo || !mismoNombre || !mismosColores) {
+    const repetido = await buscarDuplicado(supabase, input, id);
+    if (repetido !== null)
+      return { error: errorDuplicado(input.nombre.trim(), repetido) };
+  }
 
   // `stock` no se toca: lo recalcula solo el trigger de product_variantes.
   const { error } = await supabase

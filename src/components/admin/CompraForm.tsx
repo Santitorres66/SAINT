@@ -9,7 +9,7 @@ import type {
   CompraItem,
   TipoItemCompra,
 } from "@/lib/types";
-import { formatPrecio } from "@/lib/constants";
+import { formatPrecio, ordenarTalles } from "@/lib/constants";
 import { createCompra, updateCompra } from "@/app/admin/gestion-actions";
 import { etiquetaProducto } from "@/lib/catalogo";
 import Buscador from "./Buscador";
@@ -284,7 +284,14 @@ export default function CompraForm({
                         opciones={products.map((p) => ({
                           value: p.id,
                           label: etiquetaProducto(p),
-                          detalle: `stock ${p.stock}`,
+                          detalle: [
+                            `stock ${p.stock}`,
+                            p.talles.length
+                              ? `talles ${ordenarTalles(p.talles).join("/")}`
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · "),
                         }))}
                         value={l.product_id}
                         onSelect={(o) =>
@@ -355,7 +362,7 @@ export default function CompraForm({
                         className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
                       >
                         <option value="">Talle…</option>
-                        {prod.talles.map((t) => (
+                        {ordenarTalles(prod.talles).map((t) => (
                           <option key={t} value={t}>
                             {t}
                           </option>
