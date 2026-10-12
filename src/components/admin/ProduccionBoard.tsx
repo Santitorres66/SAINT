@@ -25,6 +25,13 @@ import {
   formatPrecio,
 } from "@/lib/constants";
 import { cambiarEstadoProduccion } from "@/app/admin/produccion-actions";
+import ProduccionTabla from "./ProduccionTabla";
+
+/** Las vistas del modulo. El tablero muestra el avance; la tabla, el volumen. */
+type Vista = "tablero" | "tabla";
+
+/** Donde se recuerda la vista elegida, para no volver al tablero cada vez. */
+const CLAVE_VISTA = "saint:produccion:vista";
 
 function formatFecha(iso: string) {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "short" }).format(
@@ -265,6 +272,24 @@ export default function ProduccionBoard({
   const [busqueda, setBusqueda] = useState("");
   const [matrizFiltro, setMatrizFiltro] = useState("");
 
+  /* La vista arranca siempre en "tablero" y la preferencia guardada se aplica
+     despues de montar: leer localStorage durante el render haria que el HTML
+     del servidor y el del navegador no coincidan. */
+  const [vista, setVista] = useState<Vista>("tablero");
+  useEffect(() => {
+    if (localStorage.getItem(CLAVE_VISTA) === "tabla") setVista("tabla");
+  }, []);
+
+  function elegirVista(v: Vista) {
+    setVista(v);
+    localStorage.setItem(CLAVE_VISTA, v);
+  }
+
+  const [fCliente, setFCliente] = useState("");
+  const [fColumna, setFColumna] = useState("");
+  const [fPrioridad, setFPrioridad] = useState("");
+  const [fTipo, setFTipo] = useState("");
+
   // Resincronizar cuando el servidor manda datos nuevos
   useEffect(() => setLocal(ordenes), [ordenes]);
 
@@ -356,9 +381,34 @@ export default function ProduccionBoard({
     ).entries(),
   );
 
-  // Filtro de búsqueda + matriz
+  // Clientes con al menos una orden (no el master entero: acá solo sirven
+  // los que efectivamente tienen trabajo cargado).
+  const clientesConOrden = [
+    ...new Set(local.map((o) => o.cliente).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "es"));
+
+  const hayFiltros = Boolean(
+    busqueda || matrizFiltro || fCliente || fColumna || fPrioridad || fTipo,
+  );
+
+  function limpiarFiltros() {
+    setBusqueda("");
+    setMatrizFiltro("");
+    setFCliente("");
+    setFColumna("");
+    setFPrioridad("");
+    setFTipo("");
+  }
+
   const filtradas = local.filter((o) => {
     if (matrizFiltro && o.matriz_id !== matrizFiltro) return false;
+    if (fCliente && o.cliente !== fCliente) return false;
+    // El filtro de estado es por columna, no por estado suelto: "Entregado /
+    // Vendido" son una sola cosa para quien mira el tablero.
+    if (fColumna && columnaDeEstado(o.estado).id !== fColumna) return false;
+    if (fPrioridad && o.prioridad !== fPrioridad) return false;
+    if (fTipo === "servicio" && !o.es_servicio) return false;
+    if (fTipo === "prenda" && o.es_servicio) return false;
     const t = busqueda.toLowerCase().trim();
     if (!t) return true;
     return [
@@ -390,19 +440,98 @@ export default function ProduccionBoard({
 
   return (
     <div className="space-y-4">
+      {/* Cambio de vista: el tablero muestra el avance, la tabla el volumen */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-lg border border-neutral-300 p-0.5">
+          {(
+            [
+              ["tablero", "Tablero"],
+              ["tabla", "Tabla"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => elegirVista(v)}
+              aria-pressed={vista === v}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+                vista === v
+                  ? "bg-neutral-900 text-white"
+                  : "text-neutral-600 hover:bg-neutral-100"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-neutral-400">
+          {filtradas.length}
+          {filtradas.length === local.length
+            ? " órdenes"
+            : ` de ${local.length} órdenes`}
+        </p>
+      </div>
+
       {/* Filtros */}
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar por N° de orden, cliente, prenda o pedido…"
-          className="w-full rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+          className="w-full min-w-[220px] flex-1 rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
         />
+        <select
+          value={fColumna}
+          onChange={(e) => setFColumna(e.target.value)}
+          className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+        >
+          <option value="">Todos los estados</option>
+          {COLUMNAS_PRODUCCION.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        {clientesConOrden.length > 0 && (
+          <select
+            value={fCliente}
+            onChange={(e) => setFCliente(e.target.value)}
+            className="max-w-[220px] rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+          >
+            <option value="">Todos los clientes</option>
+            {clientesConOrden.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
+        <select
+          value={fPrioridad}
+          onChange={(e) => setFPrioridad(e.target.value)}
+          className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+        >
+          <option value="">Toda prioridad</option>
+          {PRIORIDADES_PRODUCCION.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={fTipo}
+          onChange={(e) => setFTipo(e.target.value)}
+          className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+        >
+          <option value="">Prendas y servicios</option>
+          <option value="prenda">Solo prendas</option>
+          <option value="servicio">Solo servicios</option>
+        </select>
         {matricesUsadas.length > 0 && (
           <select
             value={matrizFiltro}
             onChange={(e) => setMatrizFiltro(e.target.value)}
-            className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900 sm:w-64"
+            className="max-w-[220px] rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
           >
             <option value="">Todas las matrices</option>
             {matricesUsadas.map(([id, nombre]) => (
@@ -412,6 +541,15 @@ export default function ProduccionBoard({
             ))}
           </select>
         )}
+        {hayFiltros && (
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {error && (
@@ -420,16 +558,18 @@ export default function ProduccionBoard({
         </p>
       )}
 
-      <p className="text-xs text-neutral-400">
-        Arrastrá las tarjetas entre columnas para cambiar el estado (o usá el
-        selector de cada tarjeta). “Entregado” y “Vendido” comparten columna: la
-        tarjeta aclara en cuál está y pasa a <em>Vendido</em> sola al cargar la
-        venta. “Cobrado” se completa al registrar el cobro.
-      </p>
+      {vista === "tablero" && (
+        <p className="text-xs text-neutral-400">
+          Arrastrá las tarjetas entre columnas para cambiar el estado (o usá el
+          selector de cada tarjeta). “Entregado” y “Vendido” comparten columna: la
+          tarjeta aclara en cuál está y pasa a <em>Vendido</em> sola al cargar la
+          venta. “Cobrado” se completa al registrar el cobro.
+        </p>
+      )}
 
       {/* Barra de scroll de arriba: solo si el tablero no entra en pantalla.
           Es un duplicado de la de abajo, así que no la anunciamos. */}
-      {hayQueScrollear && (
+      {vista === "tablero" && hayQueScrollear && (
         <div
           ref={barraRef}
           onScroll={() => espejar(barraRef.current, tableroRef.current)}
@@ -440,36 +580,46 @@ export default function ProduccionBoard({
         </div>
       )}
 
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div
-          ref={tableroRef}
-          onScroll={() => espejar(tableroRef.current, barraRef.current)}
-          className="flex gap-4 overflow-x-auto pb-3"
-        >
-          {COLUMNAS_PRODUCCION.map((columna) => {
-            const items = filtradas.filter((o) =>
-              (columna.estados as string[]).includes(o.estado),
-            );
-            return (
-              <Columna key={columna.id} columna={columna} count={items.length}>
-                {items.map((o) => (
-                  <Tarjeta
-                    key={o.id}
-                    orden={o}
-                    onMover={moverAColumna}
-                    pending={pending}
-                  />
-                ))}
-                {items.length === 0 && (
-                  <p className="px-1 py-6 text-center text-xs text-neutral-400">
-                    Sin órdenes
-                  </p>
-                )}
-              </Columna>
-            );
-          })}
-        </div>
-      </DndContext>
+      {vista === "tabla" && (
+        <ProduccionTabla
+          ordenes={filtradas}
+          onMover={moverAColumna}
+          pending={pending}
+        />
+      )}
+
+      {vista === "tablero" && (
+        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+          <div
+            ref={tableroRef}
+            onScroll={() => espejar(tableroRef.current, barraRef.current)}
+            className="flex gap-4 overflow-x-auto pb-3"
+          >
+            {COLUMNAS_PRODUCCION.map((columna) => {
+              const items = filtradas.filter((o) =>
+                (columna.estados as string[]).includes(o.estado),
+              );
+              return (
+                <Columna key={columna.id} columna={columna} count={items.length}>
+                  {items.map((o) => (
+                    <Tarjeta
+                      key={o.id}
+                      orden={o}
+                      onMover={moverAColumna}
+                      pending={pending}
+                    />
+                  ))}
+                  {items.length === 0 && (
+                    <p className="px-1 py-6 text-center text-xs text-neutral-400">
+                      Sin órdenes
+                    </p>
+                  )}
+                </Columna>
+              );
+            })}
+          </div>
+        </DndContext>
+      )}
     </div>
   );
 }
