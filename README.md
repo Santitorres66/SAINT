@@ -24,7 +24,8 @@ y un **panel de administración** privado, conectados a una base de datos
 9. [Cómo se usa el panel admin](#cómo-se-usa-el-panel-admin)
 10. [El circuito de un pedido](#el-circuito-de-un-pedido)
 11. [Estructura del proyecto](#estructura-del-proyecto)
-12. [Pagos con Mercado Pago](#pagos-con-mercado-pago-checkout-pro)
+12. [Pago por transferencia](#pago-por-transferencia)
+13. [Pagos con Mercado Pago](#pagos-con-mercado-pago-checkout-pro)
 
 ---
 
@@ -83,6 +84,7 @@ uno depende de los anteriores):
 | 7 | [`supabase/compras-tipos-pago.sql`](./supabase/compras-tipos-pago.sql) | Medio de pago y cuotas en compras |
 | 8 | [`supabase/produccion-prioridad-fecha.sql`](./supabase/produccion-prioridad-fecha.sql) | Prioridad y fecha estimada de entrega |
 | 9 | [`supabase/cobros.sql`](./supabase/cobros.sql) | Cobros de ventas y cierre del circuito |
+| 10 | [`supabase/pagos-transferencia.sql`](./supabase/pagos-transferencia.sql) | Pago por transferencia (monto exacto + alias/CVU) |
 
 Para cada uno:
 
@@ -256,7 +258,22 @@ saint/
 
 ---
 
+## Pago por transferencia
+
+**Es el medio de pago de la tienda hoy.** El cliente ve el monto exacto y un
+alias/CVU, transfiere, y el pedido se confirma solo: descuenta stock, entra a
+Producción y aparece en Ventas. Funciona con **Talo** (automático, un CVU por
+pedido) o, mientras tanto, con **tu alias propio** y confirmación desde Ventas.
+
+Todo el estudio, cómo funciona y la puesta en marcha paso a paso están en
+[`docs/PAGO-POR-TRANSFERENCIA.md`](./docs/PAGO-POR-TRANSFERENCIA.md).
+
+---
+
 ## Pagos con Mercado Pago (Checkout Pro)
+
+> Hoy **fuera del carrito**: el código sigue en el proyecto por si se reactiva.
+
 
 La tienda tiene **carrito** + **pago con Mercado Pago** + **órdenes y descuento
 de stock automáticos**. Piezas:

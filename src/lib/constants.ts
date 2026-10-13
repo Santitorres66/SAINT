@@ -618,15 +618,17 @@ export function colorHex(nombre: string): string | null {
 }
 
 /**
- * Si se puede pagar online.
+ * Cómo se cierra el carrito.
  *
- * Hoy está apagado a propósito. Hay pedidos que no se pueden hacer —un diseño
- * demasiado fino, o tan complejo que ya no entra en el precio de la prenda—, y
- * eso se ve recién al mirarlo. Cobrar antes de esa charla sería vender algo
- * que todavía no se sabe si se puede entregar.
+ *  - "transferencia" (hoy): el cliente paga por transferencia el monto exacto
+ *    a un alias/CVU y el pedido se confirma solo cuando entra la plata (ver
+ *    `lib/pago-transferencia.ts`). Abajo queda el link para consultar por
+ *    WhatsApp antes de pagar, para quien tenga dudas con el bordado.
+ *  - "whatsapp": sin pago en la web. El pedido entra a Producción como
+ *    pendiente y el cliente lo manda por WhatsApp; se cobra después de
+ *    charlar el bordado.
  *
- * Mientras tanto el pedido sale por WhatsApp y entra al tablero de Producción
- * como pendiente. Cuando el circuito de pago esté listo, esto pasa a `true` y
- * vuelve el botón de Mercado Pago: el checkout sigue entero, sin tocar.
+ * Mercado Pago quedó afuera del carrito. Su checkout y su webhook siguen en
+ * el código (api/checkout y api/webhooks/mercadopago) por si se reactiva.
  */
-export const PAGO_ONLINE_HABILITADO = false;
+export const CIERRE_CARRITO: "transferencia" | "whatsapp" = "transferencia";

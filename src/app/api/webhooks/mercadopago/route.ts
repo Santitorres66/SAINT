@@ -3,7 +3,8 @@ import crypto from "crypto";
 import { Payment } from "mercadopago";
 import { getMercadoPagoClient } from "@/lib/mercadopago";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { OrderItem, OrderStatus } from "@/lib/types";
+import type { OrderStatus } from "@/lib/types";
+import { confirmarOrden } from "@/lib/confirmar-orden";
 
 export const runtime = "nodejs";
 
@@ -68,86 +69,33 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient();
 
-    // Traemos la orden para evitar procesarla dos veces (idempotencia)
-    const { data: orden } = await supabase
-      .from("orders")
-      .select("id, status, items")
-      .eq("id", orderId)
-      .single();
-
-    if (!orden) return NextResponse.json({ received: true });
-
-    // Si ya estaba aprobada, no volvemos a descontar stock
-    const yaAprobada = orden.status === "approved";
-
-    // 3) Actualizamos la orden
-    await supabase
-      .from("orders")
-      .update({
-        status: nuevoEstado,
-        mp_payment_id: String(pago.id ?? dataId),
-        comprador: pago.payer?.email
-          ? {
-              email: pago.payer.email,
-              nombre: [pago.payer.first_name, pago.payer.last_name]
-                .filter(Boolean)
-                .join(" "),
-            }
-          : null,
-      })
-      .eq("id", orderId);
-
-    // Descontamos stock solo al pasar a aprobado por primera vez
-    if (nuevoEstado === "approved" && !yaAprobada) {
-      const items = (orden.items as OrderItem[]) ?? [];
-
-      // Nombre del comprador (para la orden de producción)
-      const payer = pago.payer as
-        | { email?: string; first_name?: string; last_name?: string }
-        | undefined;
-      const nombreComprador =
-        [payer?.first_name, payer?.last_name].filter(Boolean).join(" ") ||
-        payer?.email ||
-        "Cliente web";
-      const refPedido = `Venta web ${String(orderId).slice(0, 8)}`;
-
-      for (const item of items) {
-        // 1) Descontar stock de la variante vendida
-        if (item.product_id) {
-          await supabase.rpc("descontar_stock_variante", {
-            p_product_id: item.product_id,
-            p_talle: item.talle ?? "",
-            p_color: item.color ?? "",
-            p_cantidad: item.cantidad,
-          });
+    const comprador = pago.payer?.email
+      ? {
+          email: pago.payer.email,
+          nombre: [pago.payer.first_name, pago.payer.last_name]
+            .filter(Boolean)
+            .join(" "),
         }
+      : null;
 
-        // 2) Crear la orden de producción (SIN volver a descontar stock:
-        //    la venta ya lo hizo). Queda en "Pendiente" para fabricar.
-        const { data: op } = await supabase
-          .from("ordenes_produccion")
-          .insert({
-            pedido_referencia: refPedido,
-            cliente: nombreComprador,
-            product_id: item.product_id,
-            prenda: item.nombre,
-            talle: item.talle ?? "",
-            color: item.color ?? "",
-            cantidad: item.cantidad,
-            estado: "pendiente",
-          })
-          .select("id")
-          .single();
-
-        if (op) {
-          await supabase.from("produccion_historial").insert({
-            orden_id: op.id,
-            estado_anterior: null,
-            estado_nuevo: "pendiente",
-            usuario: "venta web",
-          });
-        }
-      }
+    if (nuevoEstado === "approved") {
+      // Confirma una sola vez: descuenta stock y abre las órdenes de
+      // producción. Si ya estaba aprobada, no hace nada.
+      await confirmarOrden(supabase, orderId, {
+        usuario: "venta web",
+        cambios: { mp_payment_id: String(pago.id ?? dataId), comprador },
+      });
+    } else {
+      // Un aviso tardío de "pendiente" no puede desaprobar una orden pagada.
+      await supabase
+        .from("orders")
+        .update({
+          status: nuevoEstado,
+          mp_payment_id: String(pago.id ?? dataId),
+          comprador,
+        })
+        .eq("id", orderId)
+        .neq("status", "approved");
     }
 
     return NextResponse.json({ received: true });

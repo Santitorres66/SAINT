@@ -107,11 +107,11 @@ export async function getVentasManuales(): Promise<VentaManual[]> {
 }
 
 /**
- * Listado unificado de ventas: online (Mercado Pago, aprobadas) + manuales.
- * Ordenado de la más nueva a la más vieja.
+ * Listado unificado de ventas: online (aprobadas: Mercado Pago o
+ * transferencia) + manuales. Ordenado de la más nueva a la más vieja.
  *
- * Las ventas online ya vienen cobradas por Mercado Pago: se muestran siempre
- * como saldadas, sin saldo pendiente.
+ * Las ventas online solo existen una vez pagadas: se muestran siempre como
+ * saldadas, sin saldo pendiente.
  */
 export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
   const supabase = await createClient();
@@ -151,7 +151,10 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
     fecha: o.created_at,
     canal: "online",
     cliente: o.comprador?.nombre || o.comprador?.email || "Cliente web",
-    medio_pago: "Mercado Pago",
+    medio_pago:
+      o.metodo_pago === "transferencia"
+        ? `Transferencia${o.pago_id ? " (Talo)" : ""}${o.referencia ? ` · ${o.referencia}` : ""}`
+        : "Mercado Pago",
     estado: "Pagada",
     total: Number(o.total),
     items: o.items ?? [],
@@ -159,7 +162,7 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
     descuento: 0,
     total_cobrado: Number(o.total),
     saldo: 0,
-    fecha_cobro: o.created_at,
+    fecha_cobro: o.pagado_at ?? o.created_at,
     cobros: [],
     orden_numero: null,
     orden_id: null,

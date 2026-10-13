@@ -157,7 +157,13 @@ export interface OrderItem {
 }
 
 /** Estado de una orden de compra. */
-export type OrderStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type OrderStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  /** Transferencia que no se pagó a tiempo. */
+  | "expired";
 
 /** Una orden de compra en la tabla `orders`. */
 export interface Order {
@@ -166,9 +172,21 @@ export interface Order {
   status: OrderStatus | string;
   total: number;
   items: OrderItem[];
-  comprador: { nombre?: string; email?: string } | null;
+  comprador: { nombre?: string; email?: string; telefono?: string } | null;
   mp_preference_id: string | null;
   mp_payment_id: string | null;
+  /* --- Pago por transferencia (supabase/pagos-transferencia.sql) --- */
+  metodo_pago?: "mercadopago" | "transferencia" | string;
+  referencia?: string | null;
+  pago_monto?: number | null;
+  pago_alias?: string | null;
+  pago_cvu?: string | null;
+  pago_vence?: string | null;
+  /** Id del cobro en Talo. Null = transferencia manual a la cuenta propia. */
+  pago_id?: string | null;
+  pago_estado?: string | null;
+  pagado_at?: string | null;
+  notas?: string | null;
 }
 
 /* ---------------------- Sistema de gestión ---------------------- */

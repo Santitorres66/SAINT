@@ -1,21 +1,25 @@
 import Link from "next/link";
 import VentasList from "@/components/admin/VentasList";
+import TransferenciasPendientes from "@/components/admin/TransferenciasPendientes";
 import { getVentasUnificadas } from "@/lib/gestion";
+import { getTransferenciasParaRevisar } from "@/lib/orders";
 import { getCategoriaPorProducto } from "@/lib/products";
 import { formatPrecio } from "@/lib/constants";
 
-/** Listado de ventas: online (Mercado Pago) + manuales, con su cobro. */
+/** Listado de ventas: online (transferencia / Mercado Pago) + manuales. */
 export default async function VentasPage({
   searchParams,
 }: {
   /** ?cobrar=<id> abre directo el panel de cobros de esa venta. */
   searchParams: Promise<{ cobrar?: string }>;
 }) {
-  const [ventas, categoriaPorProducto, { cobrar }] = await Promise.all([
-    getVentasUnificadas(),
-    getCategoriaPorProducto(),
-    searchParams,
-  ]);
+  const [ventas, categoriaPorProducto, { cobrar }, transferencias] =
+    await Promise.all([
+      getVentasUnificadas(),
+      getCategoriaPorProducto(),
+      searchParams,
+      getTransferenciasParaRevisar(),
+    ]);
 
   const total = ventas.reduce((a, v) => a + Number(v.total), 0);
   const cobrado = ventas.reduce((a, v) => a + Number(v.total_cobrado), 0);
@@ -46,6 +50,8 @@ export default async function VentasPage({
         <Resumen titulo="Cobrado" valor={cobrado} tono="verde" />
         <Resumen titulo="Pendiente de cobro" valor={pendiente} tono="ambar" />
       </div>
+
+      <TransferenciasPendientes pedidos={transferencias} />
 
       <VentasList
         ventas={ventas}

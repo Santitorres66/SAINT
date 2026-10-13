@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart/CartContext";
 import {
-  PAGO_ONLINE_HABILITADO,
+  CIERRE_CARRITO,
   formatPrecio,
   whatsappLink,
 } from "@/lib/constants";
@@ -13,23 +14,31 @@ import { describirBordado } from "@/lib/bordado";
 /**
  * Panel lateral (drawer) del carrito.
  *
- * Tiene dos finales posibles según `PAGO_ONLINE_HABILITADO`:
+ * Tiene dos finales posibles según `CIERRE_CARRITO`:
  *
- *  - Apagado (hoy): el pedido se manda por WhatsApp. El cliente deja su
- *    nombre, el pedido entra al tablero de Producción como pendiente y se le
- *    abre el chat con todo escrito. Se cobra después de charlar el bordado.
- *  - Encendido: vuelve el botón de Mercado Pago, que sigue intacto.
+ *  - "transferencia" (hoy): el cliente deja sus datos y pasa a la página del
+ *    pedido, con el monto exacto y el alias. El pedido se confirma solo
+ *    cuando entra la plata. Debajo queda la opción de consultar por WhatsApp
+ *    antes de pagar, para quien tenga dudas con el bordado.
+ *  - "whatsapp": el pedido se manda por WhatsApp. Entra al tablero de
+ *    Producción como pendiente y se cobra después de charlar el bordado.
  */
 export default function CartDrawer() {
   const { items, total, isOpen, closeCart, removeItem, setQty, clear } =
     useCart();
+  const router = useRouter();
   const [pagando, setPagando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Datos del pedido por WhatsApp
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
   const [notas, setNotas] = useState("");
+  /** En modo transferencia, el WhatsApp es la opción secundaria. */
+  const [consultarAntes, setConsultarAntes] = useState(
+    CIERRE_CARRITO === "whatsapp",
+  );
   /** Cuando el pedido ya quedó armado: el link listo para abrir el chat. */
   const [enviado, setEnviado] = useState<{
     referencia: string;
@@ -101,14 +110,29 @@ export default function CartDrawer() {
     }
   }
 
-  async function pagar() {
+  /**
+   * Crea el pedido para pagar por transferencia y lleva al cliente a la
+   * página del pedido, donde está el monto exacto y el alias.
+   */
+  async function pagarPorTransferencia() {
     setError(null);
+
+    if (!nombre.trim()) {
+      setError("Escribí tu nombre para que sepamos de quién es el pedido.");
+      return;
+    }
+    if (telefono.replace(/\D/g, "").length < 8) {
+      setError("Dejanos un teléfono con WhatsApp para coordinar el bordado y el envío.");
+      return;
+    }
+
     setPagando(true);
     try {
-      const res = await fetch("/api/checkout", {
+      const res = await fetch("/api/checkout/transferencia", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          cliente: { nombre, telefono, email, notas },
           items: items.map((i) => ({
             productId: i.productId,
             talle: i.talle,
@@ -121,18 +145,24 @@ export default function CartDrawer() {
 
       const data = await res.json();
 
-      if (!res.ok || !data.init_point) {
-        setError(data.error ?? "No se pudo iniciar el pago. Probá de nuevo.");
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "No se pudo armar el pedido. Probá de nuevo.");
         setPagando(false);
         return;
       }
 
-      // Redirigimos a la pantalla de pago de Mercado Pago.
-      window.location.href = data.init_point;
+      // El pedido ya existe: el carrito cumplió su función.
+      clear();
+      closeCart();
+      setNombre("");
+      setTelefono("");
+      setEmail("");
+      setNotas("");
+      router.push(data.url);
     } catch {
       setError("Hubo un problema de conexión. Probá de nuevo.");
-      setPagando(false);
     }
+    setPagando(false);
   }
 
   return (
@@ -300,52 +330,50 @@ export default function CartDrawer() {
 
             {error && <p className="text-xs text-red-400">{error}</p>}
 
-            {PAGO_ONLINE_HABILITADO ? (
-              <>
-                <button
-                  onClick={pagar}
-                  disabled={pagando}
-                  className="btn-line w-full disabled:opacity-50"
-                >
-                  {pagando ? "Redirigiendo…" : "Pagar con Mercado Pago"}
-                </button>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Tu nombre *"
+                aria-label="Tu nombre"
+                autoComplete="name"
+                className="w-full border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
+              />
+              <input
+                type="tel"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                placeholder={
+                  consultarAntes ? "Tu teléfono (opcional)" : "Tu WhatsApp *"
+                }
+                aria-label="Tu teléfono"
+                autoComplete="tel"
+                className="w-full border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
+              />
+              {!consultarAntes && (
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Tu email (opcional)"
+                  aria-label="Tu email"
+                  autoComplete="email"
+                  className="w-full border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
+                />
+              )}
+              <textarea
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                rows={2}
+                placeholder="Algo que quieras aclarar del bordado (opcional)"
+                aria-label="Notas"
+                className="w-full resize-none border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
+              />
+            </div>
 
-                <p className="text-center text-[11px] leading-relaxed text-saint-gray/60">
-                  El pago es seguro y lo procesa Mercado Pago. Después
-                  coordinamos tu bordado por WhatsApp: la vista previa es una
-                  referencia y el bordado, hecho a mano, no queda idéntico al
-                  dibujo.
-                </p>
-              </>
-            ) : (
+            {consultarAntes ? (
               <>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    placeholder="Tu nombre *"
-                    aria-label="Tu nombre"
-                    className="w-full border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
-                  />
-                  <input
-                    type="tel"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    placeholder="Tu teléfono (opcional)"
-                    aria-label="Tu teléfono"
-                    className="w-full border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
-                  />
-                  <textarea
-                    value={notas}
-                    onChange={(e) => setNotas(e.target.value)}
-                    rows={2}
-                    placeholder="Algo que quieras aclarar del bordado (opcional)"
-                    aria-label="Notas"
-                    className="w-full resize-none border-b border-saint-line bg-transparent py-2 text-sm outline-none placeholder:text-saint-gray focus:border-saint-white"
-                  />
-                </div>
-
                 <button
                   onClick={enviarPorWhatsapp}
                   disabled={pagando}
@@ -357,10 +385,47 @@ export default function CartDrawer() {
                 <p className="text-center text-[11px] leading-relaxed text-saint-gray/60">
                   Todavía no se paga acá. El precio ya incluye el bordado; solo
                   un diseño muy complejo puede tener un costo extra, y en ese
-                  caso te lo decimos antes. La vista previa es una referencia:
-                  el bordado se hace a mano y no queda idéntico al dibujo.
-                  Coordinamos todo por WhatsApp.
+                  caso te lo decimos antes. Coordinamos todo por WhatsApp.
                 </p>
+
+                {CIERRE_CARRITO === "transferencia" && (
+                  <button
+                    onClick={() => {
+                      setConsultarAntes(false);
+                      setError(null);
+                    }}
+                    className="w-full text-center text-[11px] uppercase tracking-wide2 text-saint-gray underline-offset-4 transition-colors hover:text-saint-white hover:underline"
+                  >
+                    ← Prefiero pagar ahora por transferencia
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={pagarPorTransferencia}
+                  disabled={pagando}
+                  className="btn-line w-full disabled:opacity-50"
+                >
+                  {pagando ? "Preparando tu pago…" : "Pagar por transferencia"}
+                </button>
+
+                <p className="text-center text-[11px] leading-relaxed text-saint-gray/60">
+                  Te mostramos el monto exacto y el alias. Transferís desde tu
+                  banco o billetera y el pedido se confirma solo. El precio
+                  ya incluye el bordado; la vista previa es una referencia, el
+                  bordado se hace a mano y no queda idéntico al dibujo.
+                </p>
+
+                <button
+                  onClick={() => {
+                    setConsultarAntes(true);
+                    setError(null);
+                  }}
+                  className="w-full text-center text-[11px] uppercase tracking-wide2 text-saint-gray underline-offset-4 transition-colors hover:text-saint-white hover:underline"
+                >
+                  ¿Dudas con el bordado? Consultalo antes por WhatsApp
+                </button>
               </>
             )}
           </div>
