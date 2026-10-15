@@ -142,6 +142,51 @@ export async function deleteProveedor(id: string): Promise<ActionResult> {
 
 /* -------------------------------- Compras -------------------------------- */
 
+/**
+ * Se asegura de que el producto ofrezca esa combinación antes de moverle el
+ * stock.
+ *
+ * Comprar un talle que el producto todavía no listaba es lo normal: es
+ * justamente la forma de incorporarlo al catálogo. Pero el stock vive en
+ * `product_variantes`, así que si la fila no existe no hay dónde sumarlo, y
+ * si el talle no figura en `products.talles` la variante queda invisible en
+ * todos los formularios: stock que está pero no se puede elegir.
+ *
+ * Es idempotente y barato: si la combinación ya existía, no hace nada.
+ */
+async function asegurarVariante(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  productId: string,
+  talle: string,
+  color: string,
+) {
+  await supabase.from("product_variantes").upsert(
+    { product_id: productId, talle, color, stock: 0 },
+    { onConflict: "product_id,talle,color", ignoreDuplicates: true },
+  );
+
+  const { data: prod } = await supabase
+    .from("products")
+    .select("talles, colores")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!prod) return;
+
+  const talles: string[] = prod.talles ?? [];
+  const colores: string[] = prod.colores ?? [];
+  const faltaTalle = Boolean(talle) && !talles.includes(talle);
+  const faltaColor = Boolean(color) && !colores.includes(color);
+  if (!faltaTalle && !faltaColor) return;
+
+  await supabase
+    .from("products")
+    .update({
+      talles: faltaTalle ? [...talles, talle] : talles,
+      colores: faltaColor ? [...colores, color] : colores,
+    })
+    .eq("id", productId);
+}
+
 export async function createCompra(input: {
   proveedor_id: string | null;
   fecha: string;
@@ -183,6 +228,12 @@ export async function createCompra(input: {
   // Sumar stock y actualizar costo SOLO para ítems de mercadería
   for (const it of input.items) {
     if ((it.tipo ?? "mercaderia") !== "mercaderia" || !it.product_id) continue;
+    await asegurarVariante(
+      supabase,
+      it.product_id,
+      it.talle ?? "",
+      it.color ?? "",
+    );
     await supabase.rpc("sumar_stock_variante", {
       p_product_id: it.product_id,
       p_talle: it.talle ?? "",
@@ -264,6 +315,12 @@ export async function updateCompra(
   // Sumamos el stock de los ítems nuevos (y refrescamos el costo)
   for (const it of input.items) {
     if ((it.tipo ?? "mercaderia") !== "mercaderia" || !it.product_id) continue;
+    await asegurarVariante(
+      supabase,
+      it.product_id,
+      it.talle ?? "",
+      it.color ?? "",
+    );
     await supabase.rpc("sumar_stock_variante", {
       p_product_id: it.product_id,
       p_talle: it.talle ?? "",

@@ -9,7 +9,11 @@ import type {
   CompraItem,
   TipoItemCompra,
 } from "@/lib/types";
-import { formatPrecio, ordenarTalles } from "@/lib/constants";
+import {
+  formatPrecio,
+  ordenarTalles,
+  TALLES_SUGERIDOS,
+} from "@/lib/constants";
 import { createCompra, updateCompra } from "@/app/admin/gestion-actions";
 import { etiquetaProducto } from "@/lib/catalogo";
 import Buscador from "./Buscador";
@@ -255,6 +259,10 @@ export default function CompraForm({
           {lineas.map((l, i) => {
             const prod = products.find((p) => p.id === l.product_id);
             const esMercaderia = l.tipo === "mercaderia";
+            // Talles habituales que este producto todavía no ofrece.
+            const faltantes = prod
+              ? TALLES_SUGERIDOS.filter((t) => !prod.talles.includes(t))
+              : [];
             return (
               <div key={i} className="space-y-3 rounded-xl bg-neutral-50 p-3">
                 <div className="w-full sm:w-64">
@@ -367,6 +375,19 @@ export default function CompraForm({
                             {t}
                           </option>
                         ))}
+                        {/* Comprar un talle que el producto todavía no tenía
+                            es la forma normal de incorporarlo: si no se
+                            pudiera desde acá, habría que cortar la carga,
+                            editar el producto y volver. */}
+                        {faltantes.length > 0 && (
+                          <optgroup label="Agregar al producto">
+                            {faltantes.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     )}
                     {prod.colores.length > 0 && (
