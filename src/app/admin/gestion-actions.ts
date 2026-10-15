@@ -143,6 +143,50 @@ export async function deleteProveedor(id: string): Promise<ActionResult> {
 /* -------------------------------- Compras -------------------------------- */
 
 /**
+ * Revisa que ningún ítem de mercadería venga sin talle o sin color cuando el
+ * producto los usa.
+ *
+ * Es la misma validación que hace el formulario, repetida acá porque es la
+ * que importa: una compra guardada sin talle busca una variante que no
+ * existe, no suma stock y no da ningún error. Así se perdieron compras
+ * enteras sin que nada lo avisara.
+ */
+async function validarVariantesDeItems(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  items: { tipo?: string; product_id?: string | null; nombre?: string;
+           talle?: string | null; color?: string | null }[],
+): Promise<string | null> {
+  const ids = [
+    ...new Set(
+      items
+        .filter((i) => (i.tipo ?? "mercaderia") === "mercaderia" && i.product_id)
+        .map((i) => i.product_id as string),
+    ),
+  ];
+  if (!ids.length) return null;
+
+  const { data } = await supabase
+    .from("products")
+    .select("id, nombre, talles, colores")
+    .in("id", ids);
+  const porId = new Map(
+    ((data as { id: string; nombre: string; talles: string[]; colores: string[] }[]) ?? [])
+      .map((p) => [p.id, p]),
+  );
+
+  for (const it of items) {
+    if ((it.tipo ?? "mercaderia") !== "mercaderia" || !it.product_id) continue;
+    const prod = porId.get(it.product_id);
+    if (!prod) continue;
+    if ((prod.talles ?? []).length > 0 && !it.talle)
+      return `Falta el talle de "${prod.nombre}". Sin talle la compra no suma stock.`;
+    if ((prod.colores ?? []).length > 0 && !it.color)
+      return `Falta el color de "${prod.nombre}". Sin color la compra no suma stock.`;
+  }
+  return null;
+}
+
+/**
  * Se asegura de que el producto ofrezca esa combinación antes de moverle el
  * stock.
  *
@@ -201,6 +245,9 @@ export async function createCompra(input: {
 
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const faltante = await validarVariantesDeItems(supabase, input.items);
+  if (faltante) return { error: faltante };
 
   const total = input.items.reduce(
     (a, i) => a + i.cantidad * i.costo_unitario,
@@ -272,6 +319,9 @@ export async function updateCompra(
 
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const faltante = await validarVariantesDeItems(supabase, input.items);
+  if (faltante) return { error: faltante };
 
   const { data: previa } = await supabase
     .from("compras")

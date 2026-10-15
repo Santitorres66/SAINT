@@ -203,6 +203,26 @@ export function ordenarTalles(talles: string[]): string[] {
   });
 }
 
+/** Los talles con los que se trabaja cualquier prenda de vestir. */
+export const TALLES_PRENDA = ["XS", "S", "M", "L", "XL", "XXL"];
+
+/**
+ * Qué talles se pueden elegir para un producto, haya o no stock de ellos.
+ *
+ * Ofrecer solo los talles que el producto ya tiene cargados deja afuera
+ * justo al que se quiere comprar: es el talle que falta, por eso no está. En
+ * una prenda siempre se ofrece la serie completa; en una gorra, "Único" más
+ * lo que tenga cargado, porque no todas son de talle único pero tampoco usan
+ * la serie de las remeras.
+ */
+export function tallesElegibles(
+  categoria: string,
+  delProducto: string[] = [],
+): string[] {
+  const base = categoria === "gorra" ? ["Único"] : TALLES_PRENDA;
+  return ordenarTalles([...new Set([...base, ...delProducto.filter(Boolean)])]);
+}
+
 /**
  * Criterios para ordenar el catálogo. El `value` viaja en la URL (?orden=),
  * así que un listado filtrado se puede compartir tal cual se ve.

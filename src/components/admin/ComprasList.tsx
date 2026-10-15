@@ -109,6 +109,22 @@ export default function ComprasList({ compras }: { compras: Compra[] }) {
                   <li key={idx} className="flex justify-between py-1.5">
                     <span>
                       {it.cantidad}× {it.nombre}
+                      {/* Talle y color: sin esto dos líneas de la misma
+                          remera se leen idénticas y no hay forma de saber
+                          qué entró. */}
+                      {(it.talle || it.color) && (
+                        <span className="ml-1.5 text-neutral-500">
+                          {[it.talle, it.color].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                      {tipo === "mercaderia" && !it.talle && (
+                        <span
+                          className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700"
+                          title="Esta línea se cargó sin talle, así que no sumó stock. Editá la compra, elegí el talle y guardá."
+                        >
+                          Sin talle · no sumó stock
+                        </span>
+                      )}
                       {LABEL_TIPO[tipo] && (
                         <span className="ml-2 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">
                           {LABEL_TIPO[tipo]}

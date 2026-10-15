@@ -12,7 +12,7 @@ import type {
 import {
   formatPrecio,
   ordenarTalles,
-  TALLES_SUGERIDOS,
+  tallesElegibles,
 } from "@/lib/constants";
 import { createCompra, updateCompra } from "@/app/admin/gestion-actions";
 import { etiquetaProducto } from "@/lib/catalogo";
@@ -119,6 +119,23 @@ export default function CompraForm({
   function agregarLinea() {
     setLineas((prev) => [...prev, { ...lineaVacia }]);
   }
+
+  /**
+   * El envío no es mercadería ni suma stock, pero entra en lo que costó la
+   * compra. Ya se podía cargar como insumo; esto es el atajo, para no tener
+   * que acordarse de cambiar el tipo y escribir el nombre cada vez.
+   */
+  function agregarEnvio() {
+    setLineas((prev) => [
+      ...prev,
+      {
+        ...lineaVacia,
+        tipo: "insumo",
+        descripcion: "Costo de envío",
+        cantidad: "1",
+      },
+    ]);
+  }
   function quitarLinea(i: number) {
     setLineas((prev) => prev.filter((_, idx) => idx !== i));
   }
@@ -164,6 +181,28 @@ export default function CompraForm({
 
     if (!items.length) {
       setError("Agregá al menos un ítem con cantidad.");
+      return;
+    }
+
+    /* El talle y el color no son opcionales: el stock vive por variante, así
+       que una compra sin talle no tiene dónde sumarse y la mercadería entra
+       sin que el stock se mueva. Antes se podía guardar así y no avisaba
+       nada. Se nombra la línea para no tener que buscarla a ojo. */
+    const incompleta = lineas.findIndex((l) => {
+      if (l.tipo !== "mercaderia" || !l.product_id) return false;
+      const prod = products.find((p) => p.id === l.product_id);
+      if (!prod) return false;
+      const faltaTalle =
+        tallesElegibles(prod.categoria, prod.talles).length > 0 && !l.talle;
+      return faltaTalle || (prod.colores.length > 0 && !l.color);
+    });
+    if (incompleta !== -1) {
+      const l = lineas[incompleta];
+      const prod = products.find((p) => p.id === l.product_id);
+      setError(
+        `Elegí el talle y el color de "${prod?.nombre ?? "la línea"}" ` +
+          `(ítem ${incompleta + 1}). Sin eso la compra no suma stock.`,
+      );
       return;
     }
 
@@ -259,9 +298,10 @@ export default function CompraForm({
           {lineas.map((l, i) => {
             const prod = products.find((p) => p.id === l.product_id);
             const esMercaderia = l.tipo === "mercaderia";
-            // Talles habituales que este producto todavía no ofrece.
-            const faltantes = prod
-              ? TALLES_SUGERIDOS.filter((t) => !prod.talles.includes(t))
+            // Todos los talles de la categoría, tenga o no stock de ellos:
+            // el que se está comprando es, justamente, el que falta.
+            const talles = prod
+              ? tallesElegibles(prod.categoria, prod.talles)
               : [];
             return (
               <div key={i} className="space-y-3 rounded-xl bg-neutral-50 p-3">
@@ -361,33 +401,20 @@ export default function CompraForm({
                 </div>
 
                 {/* Talle / color de la variante (si el producto los tiene) */}
-                {esMercaderia && prod && (prod.talles.length > 0 || prod.colores.length > 0) && (
+                {esMercaderia && prod && (talles.length > 0 || prod.colores.length > 0) && (
                   <div className="grid grid-cols-2 gap-3">
-                    {prod.talles.length > 0 && (
+                    {talles.length > 0 && (
                       <select
                         value={l.talle}
                         onChange={(e) => actualizar(i, "talle", e.target.value)}
                         className="rounded-lg border border-neutral-300 px-3 py-2 text-sm"
                       >
                         <option value="">Talle…</option>
-                        {ordenarTalles(prod.talles).map((t) => (
+                        {talles.map((t) => (
                           <option key={t} value={t}>
                             {t}
                           </option>
                         ))}
-                        {/* Comprar un talle que el producto todavía no tenía
-                            es la forma normal de incorporarlo: si no se
-                            pudiera desde acá, habría que cortar la carga,
-                            editar el producto y volver. */}
-                        {faltantes.length > 0 && (
-                          <optgroup label="Agregar al producto">
-                            {faltantes.map((t) => (
-                              <option key={t} value={t}>
-                                {t}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
                       </select>
                     )}
                     {prod.colores.length > 0 && (
@@ -411,13 +438,22 @@ export default function CompraForm({
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={agregarLinea}
-          className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
-        >
-          + Agregar otro ítem
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={agregarLinea}
+            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+          >
+            + Agregar otro ítem
+          </button>
+          <button
+            type="button"
+            onClick={agregarEnvio}
+            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+          >
+            + Costo de envío
+          </button>
+        </div>
 
         <div className="flex items-center justify-between border-t border-neutral-100 pt-4">
           <span className="text-sm text-neutral-500">Total de la compra</span>
