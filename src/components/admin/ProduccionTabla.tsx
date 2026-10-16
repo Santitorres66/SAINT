@@ -12,6 +12,7 @@ import {
   estaAtrasada,
   formatNumeroOrden,
   formatPrecio,
+  tituloOrden,
 } from "@/lib/constants";
 
 /** Por qué columna está ordenada la tabla. */
@@ -20,16 +21,6 @@ type Criterio = "numero" | "trabajo" | "cliente" | "fecha" | "estado";
 function formatFecha(iso: string) {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "short" }).format(
     new Date(iso),
-  );
-}
-
-/** Cómo se llama el trabajo de una orden en una lista. */
-function tituloOrden(o: OrdenProduccionVista): string {
-  return (
-    o.product_nombre ||
-    o.prenda ||
-    (o.es_servicio ? o.bordado_descripcion : "") ||
-    "—"
   );
 }
 

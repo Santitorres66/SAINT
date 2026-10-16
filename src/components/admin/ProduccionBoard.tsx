@@ -23,6 +23,8 @@ import {
   estaAtrasada,
   formatNumeroOrden,
   formatPrecio,
+  ordenarTalles,
+  tituloOrden,
 } from "@/lib/constants";
 import { cambiarEstadoProduccion } from "@/app/admin/produccion-actions";
 import ProduccionTabla from "./ProduccionTabla";
@@ -289,6 +291,8 @@ export default function ProduccionBoard({
   const [fColumna, setFColumna] = useState("");
   const [fPrioridad, setFPrioridad] = useState("");
   const [fTipo, setFTipo] = useState("");
+  const [fPrenda, setFPrenda] = useState("");
+  const [fTalle, setFTalle] = useState("");
 
   // Resincronizar cuando el servidor manda datos nuevos
   useEffect(() => setLocal(ordenes), [ordenes]);
@@ -387,8 +391,24 @@ export default function ProduccionBoard({
     ...new Set(local.map((o) => o.cliente).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b, "es"));
 
+  // Prendas y talles que efectivamente aparecen en alguna orden: una lista
+  // con todo el catálogo tendría opciones que no filtran nada.
+  const prendasConOrden = [
+    ...new Set(local.map((o) => tituloOrden(o)).filter((t) => t !== "—")),
+  ].sort((a, b) => a.localeCompare(b, "es"));
+  const tallesConOrden = ordenarTalles([
+    ...new Set(local.map((o) => o.talle).filter(Boolean)),
+  ]);
+
   const hayFiltros = Boolean(
-    busqueda || matrizFiltro || fCliente || fColumna || fPrioridad || fTipo,
+    busqueda ||
+      matrizFiltro ||
+      fCliente ||
+      fColumna ||
+      fPrioridad ||
+      fTipo ||
+      fPrenda ||
+      fTalle,
   );
 
   function limpiarFiltros() {
@@ -398,6 +418,8 @@ export default function ProduccionBoard({
     setFColumna("");
     setFPrioridad("");
     setFTipo("");
+    setFPrenda("");
+    setFTalle("");
   }
 
   const filtradas = local.filter((o) => {
@@ -409,6 +431,8 @@ export default function ProduccionBoard({
     if (fPrioridad && o.prioridad !== fPrioridad) return false;
     if (fTipo === "servicio" && !o.es_servicio) return false;
     if (fTipo === "prenda" && o.es_servicio) return false;
+    if (fPrenda && tituloOrden(o) !== fPrenda) return false;
+    if (fTalle && o.talle !== fTalle) return false;
     const t = busqueda.toLowerCase().trim();
     if (!t) return true;
     return [
@@ -492,6 +516,34 @@ export default function ProduccionBoard({
             </option>
           ))}
         </select>
+        {prendasConOrden.length > 0 && (
+          <select
+            value={fPrenda}
+            onChange={(e) => setFPrenda(e.target.value)}
+            className="max-w-[220px] rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+          >
+            <option value="">Todas las prendas</option>
+            {prendasConOrden.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        )}
+        {tallesConOrden.length > 0 && (
+          <select
+            value={fTalle}
+            onChange={(e) => setFTalle(e.target.value)}
+            className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+          >
+            <option value="">Todos los talles</option>
+            {tallesConOrden.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
         {clientesConOrden.length > 0 && (
           <select
             value={fCliente}

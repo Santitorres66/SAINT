@@ -136,6 +136,27 @@ export function usaTela(categoria: string): boolean {
   return telasDe(categoria).length > 0;
 }
 
+/**
+ * Cómo se nombra el trabajo de una orden de producción en una lista.
+ *
+ * Puede venir de un producto del catálogo, de una prenda escrita a mano o,
+ * en un servicio sobre prenda del cliente, de la descripción del bordado:
+ * sin esto último la fila quedaría con un guion mudo.
+ */
+export function tituloOrden(o: {
+  product_nombre?: string | null;
+  prenda?: string | null;
+  es_servicio?: boolean;
+  bordado_descripcion?: string | null;
+}): string {
+  return (
+    o.product_nombre ||
+    o.prenda ||
+    (o.es_servicio ? o.bordado_descripcion : "") ||
+    "—"
+  );
+}
+
 /** Lo que se muestra cuando un producto todavía no tiene tipo o familia. */
 export const SIN_CLASIFICAR = "Sin clasificar";
 
