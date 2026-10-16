@@ -58,6 +58,9 @@ function validar(input: ProductInput): string | null {
  * problema silencioso: nada falla, simplemente faltan talles.
  *
  * Alcanza con que compartan UN color: ahí ya hay un modelo+color repetido.
+ *
+ * La tela desempata: la misma remera en Heavyweight y en Estándar son dos
+ * productos legítimos, no un duplicado.
  */
 async function buscarDuplicado(
   supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
@@ -67,11 +70,21 @@ async function buscarDuplicado(
   const nombre = input.nombre.trim();
   const colores = (input.colores ?? []).filter(Boolean);
 
-  let q = supabase.from("products").select("id, nombre, colores").ilike("nombre", nombre);
+  let q = supabase
+    .from("products")
+    .select("id, nombre, colores, tela")
+    .ilike("nombre", nombre);
   if (idPropio) q = q.neq("id", idPropio);
   const { data } = await q;
 
-  for (const otro of (data as { id: string; colores: string[] | null }[]) ?? []) {
+  const telaPropia = (input.tela ?? "").trim().toLowerCase();
+
+  for (const otro of (data as {
+    id: string;
+    colores: string[] | null;
+    tela: string | null;
+  }[]) ?? []) {
+    if ((otro.tela ?? "").trim().toLowerCase() !== telaPropia) continue;
     const suyos = (otro.colores ?? []).filter(Boolean);
     // Sin colores cargados, el nombre solo ya identifica al artículo.
     if (!colores.length && !suyos.length) return "";
@@ -114,6 +127,7 @@ export async function createProduct(
       nombre: input.nombre.trim(),
       categoria: input.categoria,
       familia: input.familia ?? "",
+      tela: input.tela ?? "",
       molde: input.molde ?? "",
       precio: input.precio,
       costo: input.costo ?? 0,
@@ -182,7 +196,7 @@ export async function updateProduct(
      trabarte justo en el arreglo. */
   const { data: previo } = await supabase
     .from("products")
-    .select("nombre, colores")
+    .select("nombre, colores, tela")
     .eq("id", id)
     .maybeSingle();
 
@@ -192,8 +206,11 @@ export async function updateProduct(
   const mismosColores =
     JSON.stringify((previo?.colores ?? []).filter(Boolean)) ===
     JSON.stringify((input.colores ?? []).filter(Boolean));
+  const mismaTela =
+    (previo?.tela ?? "").trim().toLowerCase() ===
+    (input.tela ?? "").trim().toLowerCase();
 
-  if (!previo || !mismoNombre || !mismosColores) {
+  if (!previo || !mismoNombre || !mismosColores || !mismaTela) {
     const repetido = await buscarDuplicado(supabase, input, id);
     if (repetido !== null)
       return { error: errorDuplicado(input.nombre.trim(), repetido) };
@@ -206,6 +223,7 @@ export async function updateProduct(
       nombre: input.nombre.trim(),
       categoria: input.categoria,
       familia: input.familia ?? "",
+      tela: input.tela ?? "",
       molde: input.molde ?? "",
       precio: input.precio,
       costo: input.costo ?? 0,

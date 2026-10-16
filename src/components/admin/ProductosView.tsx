@@ -13,6 +13,7 @@ import {
   labelFamilia,
   labelMolde,
   ordenarTalles,
+  usaTela,
   SIN_CLASIFICAR,
   usaFamilias,
 } from "@/lib/constants";
@@ -83,6 +84,7 @@ export default function ProductosView({
   const [fProducto, setFProducto] = useState("");
   const [fColor, setFColor] = useState("");
   const [fTalle, setFTalle] = useState("");
+  const [fTela, setFTela] = useState("");
   /** Solo productos a los que les falta algún talle: la vista de recompra. */
   const [soloFaltantes, setSoloFaltantes] = useState(false);
   const [orden, setOrden] = useState<Orden>("precio_desc");
@@ -158,6 +160,9 @@ export default function ProductosView({
   const productosUnicos = [...new Set(products.map((p) => p.nombre))].sort();
   const coloresUnicos = [...new Set(products.flatMap((p) => p.colores))].sort();
   const tallesUnicos = [...new Set(products.flatMap((p) => p.talles))].sort();
+  const telasUnicas = [
+    ...new Set(products.map((p) => p.tela).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "es"));
 
   const filtrados = useMemo(() => {
     const r = products.filter((p) => {
@@ -166,6 +171,7 @@ export default function ProductosView({
       if (fProducto && p.nombre !== fProducto) return false;
       if (fColor && !p.colores.includes(fColor)) return false;
       if (fTalle && !p.talles.includes(fTalle)) return false;
+      if (fTela && p.tela !== fTela) return false;
       if (soloFaltantes && !tieneFaltante(p)) return false;
       return true;
     });
@@ -180,10 +186,10 @@ export default function ProductosView({
     );
     // `tieneFaltante` se recalcula con los mismos datos que las dependencias.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, busca, fProducto, fColor, fTalle, soloFaltantes, orden]);
+  }, [products, busca, fProducto, fColor, fTalle, fTela, soloFaltantes, orden]);
 
   const hayFiltros = Boolean(
-    busca || fProducto || fColor || fTalle || soloFaltantes,
+    busca || fProducto || fColor || fTalle || fTela || soloFaltantes,
   );
 
   // Stock a mostrar según los filtros: si filtrás color/talle, muestra el
@@ -471,6 +477,20 @@ export default function ProductosView({
           />
           Con talles en 0
         </label>
+        {telasUnicas.length > 0 && (
+          <select
+            value={fTela}
+            onChange={(e) => setFTela(e.target.value)}
+            className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
+          >
+            <option value="">Todas las telas</option>
+            {telasUnicas.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           value={orden}
           onChange={(e) => setOrden(e.target.value as Orden)}
@@ -489,6 +509,7 @@ export default function ProductosView({
               setFProducto("");
               setFColor("");
               setFTalle("");
+              setFTela("");
               setSoloFaltantes(false);
             }}
             className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100"
@@ -775,9 +796,16 @@ export default function ProductosView({
                                           />
                                         ) : null}
                                       </div>
-                                      <p className="font-medium text-neutral-900">
-                                        {p.nombre}
-                                      </p>
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-neutral-900">
+                                          {p.nombre}
+                                        </p>
+                                        {usaTela(p.categoria) && p.tela && (
+                                          <p className="text-xs text-neutral-500">
+                                            {p.tela}
+                                          </p>
+                                        )}
+                                      </div>
                                     </div>
                                   </td>
                                   <td className="px-4 py-3 text-neutral-700">

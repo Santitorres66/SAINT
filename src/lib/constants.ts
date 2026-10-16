@@ -115,6 +115,27 @@ export function canonizarFamilia(categoria: string, familia: string): string {
   return familiasDe(categoria).find((f) => claveMolde(f) === k) ?? familia;
 }
 
+/**
+ * Telas por categoría.
+ *
+ * Son sugerencias, no una lista cerrada: se puede escribir otra. Solo las
+ * prendas la usan; una gorra no se clasifica por tela.
+ */
+export const TELAS_SUGERIDAS: Record<string, string[]> = {
+  remera: ["Heavyweight", "Estándar"],
+  buzo: ["Heavyweight", "Estándar"],
+};
+
+/** Las telas sugeridas de una categoría. Vacío = no usa el campo. */
+export function telasDe(categoria: string): string[] {
+  return TELAS_SUGERIDAS[categoria] ?? [];
+}
+
+/** Si la categoría se clasifica por tela (hoy: remeras y buzos). */
+export function usaTela(categoria: string): boolean {
+  return telasDe(categoria).length > 0;
+}
+
 /** Lo que se muestra cuando un producto todavía no tiene tipo o familia. */
 export const SIN_CLASIFICAR = "Sin clasificar";
 

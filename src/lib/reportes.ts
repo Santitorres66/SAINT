@@ -218,6 +218,7 @@ type Producto = {
   categoria: string;
   familia: string | null;
   molde: string | null;
+  tela: string | null;
   costo: number;
   precio: number;
   stock: number;
@@ -229,7 +230,9 @@ async function traerProductos(supabase: Supabase) {
     (a, b) =>
       supabase
         .from("products")
-        .select("id, nombre, categoria, familia, molde, costo, precio, stock, activo")
+        .select(
+          "id, nombre, categoria, familia, molde, tela, costo, precio, stock, activo",
+        )
         .order("nombre")
         .range(a, b),
     "products",
@@ -445,6 +448,7 @@ export async function reporteVentas(rango: RangoReporte) {
         localidad: v.localidad,
         producto: it.nombre,
         categoria,
+        tela: productoPorId.get(it.product_id ?? "")?.tela ?? "",
         talle: it.talle ?? "",
         color: it.color ?? "",
         bordado: it.bordado ? describirBordado(it.bordado) : "",
@@ -500,6 +504,7 @@ export async function reporteVentas(rango: RangoReporte) {
       { titulo: "Localidad", clave: "localidad", ancho: 18 },
       { titulo: "Producto", clave: "producto", ancho: 30 },
       { titulo: "Categoría", clave: "categoria", ancho: 14 },
+      { titulo: "Tela", clave: "tela", ancho: 13 },
       { titulo: "Talle", clave: "talle", ancho: 8 },
       { titulo: "Color", clave: "color", ancho: 12 },
       { titulo: "Bordado", clave: "bordado", ancho: 30 },
@@ -730,6 +735,7 @@ export async function reporteCompras(rango: RangoReporte) {
         tipo: TIPO_ITEM[tipo] ?? tipo,
         item: it.nombre,
         categoria: producto ? labelCategoria(producto.categoria) : "",
+        tela: producto?.tela ?? "",
         talle: it.talle ?? "",
         color: it.color ?? "",
         cantidad: n(it.cantidad),
@@ -800,6 +806,7 @@ export async function reporteCompras(rango: RangoReporte) {
       { titulo: "Tipo", clave: "tipo", ancho: 16 },
       { titulo: "Ítem", clave: "item", ancho: 30 },
       { titulo: "Categoría", clave: "categoria", ancho: 14 },
+      { titulo: "Tela", clave: "tela", ancho: 13 },
       { titulo: "Talle", clave: "talle", ancho: 8 },
       { titulo: "Color", clave: "color", ancho: 12 },
       { titulo: "Cantidad", clave: "cantidad", tipo: "numero", ancho: 10, total: true },

@@ -32,6 +32,13 @@ export interface Product {
    */
   familia: string;
   molde: Molde;
+  /**
+   * Tela de la prenda ("Heavyweight", "Estándar"). Solo en remeras y buzos;
+   * en gorras queda vacía. Antes vivía metida dentro del nombre, así que no
+   * se podía filtrar por ella ni saber que dos productos eran la misma
+   * prenda en dos telas.
+   */
+  tela: string;
   precio: number;
   costo: number; // precio de costo (para calcular ganancia)
   descripcion: string;

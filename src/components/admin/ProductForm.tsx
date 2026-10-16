@@ -20,6 +20,8 @@ import {
   claveMolde,
   familiasDe,
   moldesDe,
+  telasDe,
+  usaTela,
   usaFamilias,
   TALLES_SUGERIDOS,
   COLORES_SUGERIDOS,
@@ -70,6 +72,7 @@ export default function ProductForm({
   const [familia, setFamilia] = useState(() =>
     initial ? canonizarFamilia(initial.categoria, initial.familia ?? "") : "",
   );
+  const [tela, setTela] = useState(initial?.tela ?? "");
   const [molde, setMolde] = useState<Molde>(() =>
     initial
       ? canonizarMolde(
@@ -204,6 +207,8 @@ export default function ProductForm({
       nombre,
       categoria,
       familia: conFamilia ? familia.trim() : "",
+      // La tela es de prendas: si la categoría no la usa, no se guarda.
+      tela: usaTela(categoria) ? tela.trim() : "",
       molde: molde.trim(),
       precio: Number(precio),
       costo: Number(costo) || 0,
@@ -372,6 +377,35 @@ export default function ProductForm({
               : "Agrupa el producto en el listado y define qué tabla de talles ve el cliente en la web."}
           </p>
         </div>
+
+        {/* Tela: solo en prendas. Antes vivía metida dentro del nombre
+            ("Remera Oversize Heavyweight"), así que no había forma de
+            filtrar por ella ni de saber que dos productos eran la misma
+            prenda en dos telas distintas. */}
+        {usaTela(categoria) && (
+          <div>
+            <label htmlFor="tela" className={labelClase}>
+              Tela
+            </label>
+            <input
+              id="tela"
+              list="telas-sugeridas"
+              value={tela}
+              onChange={(e) => setTela(e.target.value)}
+              className={inputClase}
+              placeholder="Ej: Heavyweight"
+            />
+            <datalist id="telas-sugeridas">
+              {telasDe(categoria).map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+            <p className="mt-1.5 text-sm text-neutral-500">
+              Opcional. Elegí una de la lista o escribí otra. Sirve para
+              filtrar y para distinguir la misma prenda en dos telas.
+            </p>
+          </div>
+        )}
 
         <div className="grid gap-6 sm:grid-cols-2">
           <div>

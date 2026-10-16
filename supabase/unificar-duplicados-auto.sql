@@ -39,7 +39,11 @@ grupos as (
       as ids,
     array_agg(nombre order by (case when fotos > 0 then 0 else 1 end), created_at)
       as nombres,
-    array_agg(talles order by (case when fotos > 0 then 0 else 1 end), created_at)
+    -- Los talles van aplanados a texto a proposito: juntar varios arrays
+    -- en uno solo falla si los productos tienen distinta cantidad de
+    -- talles ("cannot accumulate arrays of different dimensionality").
+    array_agg(array_to_string(talles, '/')
+              order by (case when fotos > 0 then 0 else 1 end), created_at)
       as talles_de_cada_uno
   from normalizados
   group by clave_nombre, clave_colores
