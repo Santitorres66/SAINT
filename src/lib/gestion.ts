@@ -223,7 +223,13 @@ export interface CobroListado {
  */
 export async function getCobranzas(): Promise<{
   cobros: CobroListado[];
-  pendientes: { cliente: string; saldo: number; ventas: number }[];
+  pendientes: {
+    cliente: string;
+    saldo: number;
+    ventas: number;
+    /** Teléfono de la ficha del cliente, si tiene uno cargado. */
+    telefono: string;
+  }[];
 }> {
   const supabase = await createClient();
   const [{ data: cobros }, { data: orders }, { data: ventas }] =
@@ -237,7 +243,9 @@ export async function getCobranzas(): Promise<{
         .eq("status", "approved"),
       supabase
         .from("ventas")
-        .select("cliente, total, descuento, total_cobrado")
+        .select(
+          "cliente, cliente_id, total, descuento, total_cobrado, clientes(telefono)",
+        )
         .neq("estado_cobro", "cobrado"),
     ]);
 
@@ -287,13 +295,19 @@ export async function getCobranzas(): Promise<{
   }));
 
   // Cuenta corriente: saldo pendiente por cliente.
-  const porCliente = new Map<string, { saldo: number; ventas: number }>();
-  for (const v of (ventas as {
+  const porCliente = new Map<
+    string,
+    { cliente: string; saldo: number; ventas: number; telefono: string }
+  >();
+  type FilaVenta = {
     cliente: string | null;
+    cliente_id: string | null;
     total: number;
     descuento: number;
     total_cobrado: number;
-  }[]) ?? []) {
+    clientes: { telefono: string | null } | { telefono: string | null }[] | null;
+  };
+  for (const v of (ventas as FilaVenta[]) ?? []) {
     const saldo = saldoVenta({
       total: Number(v.total),
       descuento: Number(v.descuento ?? 0),
@@ -301,17 +315,28 @@ export async function getCobranzas(): Promise<{
     });
     if (saldo <= 0.01) continue;
     const cliente = v.cliente?.trim() || "Sin cliente";
-    const prev = porCliente.get(cliente) ?? { saldo: 0, ventas: 0 };
-    porCliente.set(cliente, { saldo: prev.saldo + saldo, ventas: prev.ventas + 1 });
+    const ficha = Array.isArray(v.clientes) ? v.clientes[0] : v.clientes;
+    // Agrupamos por ficha de cliente si la venta tiene una; si no, por nombre.
+    const clave = v.cliente_id ?? `nombre:${cliente}`;
+    const prev = porCliente.get(clave) ?? {
+      cliente,
+      saldo: 0,
+      ventas: 0,
+      telefono: "",
+    };
+    porCliente.set(clave, {
+      ...prev,
+      saldo: prev.saldo + saldo,
+      ventas: prev.ventas + 1,
+      telefono: prev.telefono || ficha?.telefono?.trim() || "",
+    });
   }
 
   return {
     cobros: [...manuales, ...online].sort(
       (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
     ),
-    pendientes: [...porCliente.entries()]
-      .map(([cliente, d]) => ({ cliente, ...d }))
-      .sort((a, b) => b.saldo - a.saldo),
+    pendientes: [...porCliente.values()].sort((a, b) => b.saldo - a.saldo),
   };
 }
 

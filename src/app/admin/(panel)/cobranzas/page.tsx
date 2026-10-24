@@ -9,6 +9,41 @@ function formatFecha(iso: string) {
 }
 
 /**
+ * Pasa un teléfono argentino al formato que pide wa.me (549 + área + número).
+ * Devuelve null si no hay un número usable.
+ */
+function telefonoWhatsApp(tel: string): string | null {
+  let d = tel.replace(/\D/g, "");
+  if (!d) return null;
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("54")) {
+    d = d.slice(2);
+    if (d.startsWith("9")) d = d.slice(1);
+  }
+  if (d.startsWith("0")) d = d.slice(1);
+  // Cargado con el 15 (ej. 351 15 1234567): se saca, WhatsApp no lo usa.
+  if (d.length === 12) {
+    const corte = [2, 3, 4].find((a) => d.slice(a, a + 2) === "15");
+    if (corte !== undefined) d = d.slice(0, corte) + d.slice(corte + 2);
+  }
+  if (d.length !== 10) return null;
+  return `549${d}`;
+}
+
+/** Recordatorio de saldo, ya escrito para mandar por WhatsApp. */
+function linkRecordatorio(tel: string, cliente: string, saldo: number) {
+  const numero = telefonoWhatsApp(tel);
+  if (!numero) return null;
+  const nombre = cliente.split(" ")[0];
+  const texto =
+    `¡Hola ${nombre}! Te escribimos de SAINT 👋\n\n` +
+    `Te recordamos que te queda un saldo pendiente de ${formatPrecio(saldo)}.\n` +
+    `Podés abonarlo por transferencia al alias *saint.prendas* o en efectivo.\n\n` +
+    `¡Muchas gracias!`;
+  return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+}
+
+/**
  * Cobranzas: toda la plata que entró (cobros de ventas manuales + ventas web
  * pagadas) y, arriba, la cuenta corriente con lo que falta cobrar.
  */
@@ -56,22 +91,41 @@ export default async function CobranzasPage() {
             Cuenta corriente
           </h2>
           <ul className="divide-y divide-neutral-100 text-sm">
-            {pendientes.map((p) => (
-              <li
-                key={p.cliente}
-                className="flex items-center justify-between gap-4 py-2"
-              >
-                <span className="text-neutral-800">
-                  {p.cliente}{" "}
-                  <span className="text-neutral-400">
-                    ({p.ventas} {p.ventas === 1 ? "venta" : "ventas"})
+            {pendientes.map((p) => {
+              const wa = linkRecordatorio(p.telefono, p.cliente, p.saldo);
+              return (
+                <li
+                  key={`${p.cliente}-${p.telefono}`}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2"
+                >
+                  <span className="text-neutral-800">
+                    {p.cliente}{" "}
+                    <span className="text-neutral-400">
+                      ({p.ventas} {p.ventas === 1 ? "venta" : "ventas"})
+                    </span>
                   </span>
-                </span>
-                <span className="font-medium text-amber-700">
-                  {formatPrecio(p.saldo)}
-                </span>
-              </li>
-            ))}
+                  <span className="flex items-center gap-3">
+                    {wa ? (
+                      <a
+                        href={wa}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-emerald-700"
+                      >
+                        Avisar por WhatsApp
+                      </a>
+                    ) : (
+                      <span className="text-xs text-neutral-400">
+                        Sin teléfono
+                      </span>
+                    )}
+                    <span className="font-medium text-amber-700">
+                      {formatPrecio(p.saldo)}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
