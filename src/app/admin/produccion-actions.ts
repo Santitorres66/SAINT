@@ -416,6 +416,12 @@ export async function cambiarEstadoProduccion(
       };
   }
 
+  if (nuevoEstado === "perdido" && orden.venta_id)
+    return {
+      error:
+        "Esta orden ya tiene una venta cargada. Eliminá la venta antes de marcarla como perdida.",
+    };
+
   // Volver atrás con una venta ya cargada desincronizaría orden y plata.
   const cerrados: string[] = ["vendido", "cobrado"];
   if (cerrados.includes(anterior) && !cerrados.includes(nuevoEstado))

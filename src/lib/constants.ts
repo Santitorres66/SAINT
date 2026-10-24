@@ -370,6 +370,12 @@ export const ESTADOS_PRODUCCION = [
     col: "bg-emerald-50 border-emerald-200",
     chip: "bg-emerald-100 text-emerald-800",
   },
+  {
+    value: "perdido",
+    label: "Perdido",
+    col: "bg-red-50 border-red-200",
+    chip: "bg-red-100 text-red-800",
+  },
 ] as const;
 
 export function labelEstado(value: string): string {
@@ -440,7 +446,26 @@ export const COLUMNAS_PRODUCCION: {
     col: "bg-emerald-50 border-emerald-200",
     chip: "bg-emerald-100 text-emerald-800",
   },
+  {
+    // Merma: la prenda se rompió o el bordado salió mal. El stock ya se había
+    // descontado al crear la orden, así que no se toca.
+    id: "perdido",
+    label: "Perdido",
+    estados: ["perdido"],
+    destino: "perdido",
+    col: "bg-red-50 border-red-200",
+    chip: "bg-red-100 text-red-800",
+  },
 ];
+
+/**
+ * Columnas que se dibujan en el tablero. "Cobrado" es el último eslabón: la
+ * orden ya terminó todo el circuito, así que sale del tablero (sigue en la
+ * vista de tabla y en el detalle).
+ */
+export const COLUMNAS_TABLERO = COLUMNAS_PRODUCCION.filter(
+  (c) => c.id !== "cobrado",
+);
 
 /** La columna del tablero donde cae una orden según su estado. */
 export function columnaDeEstado(estado: string) {
@@ -455,7 +480,12 @@ export function columnaDeEstado(estado: string) {
  * Estados en los que la orden ya salió del taller: no tiene sentido marcarlos
  * como atrasados ni volver a descontar stock.
  */
-export const ESTADOS_CERRADOS = ["entregado", "vendido", "cobrado"] as const;
+export const ESTADOS_CERRADOS = [
+  "entregado",
+  "vendido",
+  "cobrado",
+  "perdido",
+] as const;
 
 /** Estado de cobro de una venta, con su etiqueta y color. */
 export const ESTADOS_COBRO = [

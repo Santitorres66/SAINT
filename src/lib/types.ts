@@ -351,7 +351,9 @@ export type EstadoProduccion =
   | "fabricado"
   | "entregado"
   | "vendido"
-  | "cobrado";
+  | "cobrado"
+  /** Se rompió o salió mal: merma, no se vende ni se cobra. */
+  | "perdido";
 
 export type PrioridadProduccion = "alta" | "media" | "baja";
 

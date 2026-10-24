@@ -15,6 +15,7 @@ import {
 import type { OrdenProduccionVista, EstadoProduccion } from "@/lib/types";
 import {
   COLUMNAS_PRODUCCION,
+  COLUMNAS_TABLERO,
   PRIORIDADES_PRODUCCION,
   chipCobro,
   labelCobro,
@@ -636,7 +637,9 @@ export default function ProduccionBoard({
           Arrastrá las tarjetas entre columnas para cambiar el estado (o usá el
           selector de cada tarjeta). “Entregado” y “Vendido” comparten columna: la
           tarjeta aclara en cuál está y pasa a <em>Vendido</em> sola al cargar la
-          venta. “Cobrado” se completa al registrar el cobro.
+          venta. Al registrar el cobro la orden pasa a <em>Cobrado</em> y sale
+          del tablero (sigue en la vista Tabla). Lo que se rompió o salió mal va
+          a <em>Perdido</em>.
         </p>
       )}
 
@@ -668,7 +671,7 @@ export default function ProduccionBoard({
             onScroll={() => espejar(tableroRef.current, barraRef.current)}
             className="flex gap-4 overflow-x-auto pb-3"
           >
-            {COLUMNAS_PRODUCCION.map((columna) => {
+            {COLUMNAS_TABLERO.map((columna) => {
               const items = filtradas.filter((o) =>
                 (columna.estados as string[]).includes(o.estado),
               );
