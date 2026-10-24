@@ -16,6 +16,7 @@ import type { OrdenProduccionVista, EstadoProduccion } from "@/lib/types";
 import {
   COLUMNAS_PRODUCCION,
   COLUMNAS_TABLERO,
+  MOTIVOS_MERMA,
   PRIORIDADES_PRODUCCION,
   chipCobro,
   labelCobro,
@@ -27,7 +28,10 @@ import {
   ordenarTalles,
   tituloOrden,
 } from "@/lib/constants";
-import { cambiarEstadoProduccion } from "@/app/admin/produccion-actions";
+import {
+  cambiarEstadoProduccion,
+  marcarPerdida,
+} from "@/app/admin/produccion-actions";
 import { saldarVentaSinSaldo } from "@/app/admin/gestion-actions";
 import ProduccionTabla from "./ProduccionTabla";
 
@@ -263,6 +267,130 @@ function Columna({
   );
 }
 
+/* ----------------------------- Marcar perdida ----------------------------- */
+/**
+ * Pide el motivo antes de mandar una orden a "Perdido": sin eso, la pestaña
+ * de Mermas no puede decir qué se está rompiendo ni por qué.
+ */
+function PerdidaModal({
+  orden,
+  onClose,
+  onListo,
+}: {
+  orden: OrdenProduccionVista;
+  onClose: () => void;
+  onListo: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState<string>(MOTIVOS_MERMA[0].value);
+  const [nota, setNota] = useState("");
+  // Si es para un cliente, lo normal es volver a hacerla.
+  const [rehacer, setRehacer] = useState(Boolean(orden.cliente));
+
+  function confirmar(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const res = await marcarPerdida(orden.id, { motivo, nota, rehacer });
+      if (res?.error) setError(res.error);
+      else onListo();
+    });
+  }
+
+  const inputClase =
+    "w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm outline-none transition focus:border-neutral-900";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
+      <form
+        onSubmit={confirmar}
+        className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl"
+      >
+        <div>
+          <h3 className="text-lg font-semibold text-neutral-900">
+            Marcar como perdida
+          </h3>
+          <p className="mt-1 text-sm text-neutral-500">
+            {formatNumeroOrden(orden.numero)} · {tituloOrden(orden)}
+            {orden.cliente ? ` · ${orden.cliente}` : ""}
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="merma-motivo" className="mb-1.5 block text-sm font-medium text-neutral-700">
+            ¿Qué pasó?
+          </label>
+          <select
+            id="merma-motivo"
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            className={inputClase}
+          >
+            {MOTIVOS_MERMA.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="merma-nota" className="mb-1.5 block text-sm font-medium text-neutral-700">
+            Detalle (opcional)
+          </label>
+          <input
+            id="merma-nota"
+            value={nota}
+            onChange={(e) => setNota(e.target.value)}
+            className={inputClase}
+            placeholder="Ej: se cortó el hilo y quedó corrido el logo"
+          />
+        </div>
+
+        <label className="flex items-start gap-2 text-sm text-neutral-700">
+          <input
+            type="checkbox"
+            checked={rehacer}
+            onChange={(e) => setRehacer(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Rehacer la orden ahora
+            <span className="block text-xs text-neutral-500">
+              Crea una orden nueva en Pendiente, con prioridad alta, y descuenta
+              otra prenda del stock.
+            </span>
+          </span>
+        </label>
+
+        {error && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-neutral-300 px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+          >
+            {pending ? "Guardando…" : "Marcar como perdida"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /* --------------------------------- Board -------------------------------- */
 export default function ProduccionBoard({
   ordenes,
@@ -272,7 +400,13 @@ export default function ProduccionBoard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [local, setLocal] = useState(ordenes);
+  // Lo perdido no se muestra acá: se sigue en la pestaña Mermas.
+  const [local, setLocal] = useState(() =>
+    ordenes.filter((o) => o.estado !== "perdido"),
+  );
+  const [perdiendo, setPerdiendo] = useState<OrdenProduccionVista | null>(
+    null,
+  );
   const [busqueda, setBusqueda] = useState("");
   const [matrizFiltro, setMatrizFiltro] = useState("");
 
@@ -297,7 +431,10 @@ export default function ProduccionBoard({
   const [fTalle, setFTalle] = useState("");
 
   // Resincronizar cuando el servidor manda datos nuevos
-  useEffect(() => setLocal(ordenes), [ordenes]);
+  useEffect(
+    () => setLocal(ordenes.filter((o) => o.estado !== "perdido")),
+    [ordenes],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -328,6 +465,12 @@ export default function ProduccionBoard({
     const actual = local.find((o) => o.id === id);
     if (!actual || actual.estado === estado) return;
     setError(null);
+
+    // Perder una orden pide el motivo: se abre el formulario.
+    if (estado === "perdido") {
+      setPerdiendo(actual);
+      return;
+    }
 
     // "Vendido" y "Cobrado" no se marcan a mano: los produce la venta y su
     // cobro. Si el usuario los elige, lo llevamos a donde se cargan de verdad.
@@ -532,7 +675,7 @@ export default function ProduccionBoard({
           className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
         >
           <option value="">Todos los estados</option>
-          {COLUMNAS_PRODUCCION.map((c) => (
+          {COLUMNAS_PRODUCCION.filter((c) => c.id !== "perdido").map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
             </option>
@@ -639,7 +782,7 @@ export default function ProduccionBoard({
           tarjeta aclara en cuál está y pasa a <em>Vendido</em> sola al cargar la
           venta. Al registrar el cobro la orden pasa a <em>Cobrado</em> y sale
           del tablero (sigue en la vista Tabla). Lo que se rompió o salió mal va
-          a <em>Perdido</em>.
+          a <em>Perdido</em> y se sigue en la pestaña Mermas.
         </p>
       )}
 
@@ -695,6 +838,19 @@ export default function ProduccionBoard({
             })}
           </div>
         </DndContext>
+      )}
+
+      {perdiendo && (
+        <PerdidaModal
+          orden={perdiendo}
+          onClose={() => setPerdiendo(null)}
+          onListo={() => {
+            const id = perdiendo.id;
+            setPerdiendo(null);
+            setLocal((prev) => prev.filter((o) => o.id !== id));
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );

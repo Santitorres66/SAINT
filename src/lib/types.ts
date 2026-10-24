@@ -428,7 +428,22 @@ export interface OrdenProduccion {
   posicion: number;
   created_at: string;
   updated_at: string;
+  /* --- Merma (solo si la orden pasó a "perdido") --- */
+  merma_motivo?: string | null;
+  merma_nota?: string | null;
+  /** Estado en el que estaba la orden cuando se perdió. */
+  merma_etapa?: string | null;
+  fecha_merma?: string | null;
+  merma_estado?: EstadoMerma | null;
+  merma_resolucion?: string | null;
+  /** Orden nueva que se hizo para reemplazar a esta. */
+  rehecha_orden_id?: string | null;
+  /** En una orden rehecha: la orden perdida a la que reemplaza. */
+  origen_merma_id?: string | null;
 }
+
+/** Seguimiento de una merma: abierta hasta que se rehace o se cierra. */
+export type EstadoMerma = "abierta" | "rehecha" | "cerrada";
 
 /** Orden de producción con datos derivados para las tarjetas/Kanban. */
 export interface OrdenProduccionVista extends OrdenProduccion {

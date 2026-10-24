@@ -14,6 +14,7 @@ import type {
 function revalidarProduccion() {
   revalidatePath("/admin/produccion");
   revalidatePath("/admin/produccion/matrices");
+  revalidatePath("/admin/mermas");
   // El stock puede cambiar al crear órdenes → refrescamos productos y web
   revalidatePath("/admin/productos");
   revalidatePath("/admin");
@@ -416,11 +417,11 @@ export async function cambiarEstadoProduccion(
       };
   }
 
-  if (nuevoEstado === "perdido" && orden.venta_id)
-    return {
-      error:
-        "Esta orden ya tiene una venta cargada. Eliminá la venta antes de marcarla como perdida.",
-    };
+  // Perder una orden o sacarla de "perdido" tiene su propio flujo: registra
+  // (o limpia) el motivo y el seguimiento de la merma.
+  if (nuevoEstado === "perdido")
+    return marcarPerdida(id, { motivo: "otro", nota: "", rehacer: false });
+  if (anterior === "perdido") return volverAProduccion(id, nuevoEstado);
 
   // Volver atrás con una venta ya cargada desincronizaría orden y plata.
   const cerrados: string[] = ["vendido", "cobrado"];
@@ -447,6 +448,250 @@ export async function cambiarEstadoProduccion(
     orden_id: id,
     estado_anterior: anterior,
     estado_nuevo: nuevoEstado,
+    usuario: user.email ?? "",
+  });
+
+  revalidarProduccion();
+  return { ok: true };
+}
+
+/* -------------------------------- Mermas --------------------------------- */
+
+/**
+ * Marca una orden como perdida (merma): la prenda se rompió o el bordado
+ * salió mal. Guarda el motivo y en qué etapa pasó, y opcionalmente la rehace
+ * en el momento.
+ *
+ * El stock no se toca: la prenda ya se descontó al crear la orden y, como se
+ * perdió, no vuelve. Si se rehace, la orden nueva descuenta otra.
+ */
+export async function marcarPerdida(
+  id: string,
+  input: { motivo: string; nota: string; rehacer: boolean },
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { data: orden } = await supabase
+    .from("ordenes_produccion")
+    .select("estado, venta_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!orden) return { error: "No se encontró la orden." };
+  if (orden.estado === "perdido") return { ok: true };
+  if (orden.venta_id)
+    return {
+      error:
+        "Esta orden ya tiene una venta cargada. Eliminá la venta antes de marcarla como perdida.",
+    };
+
+  const { error } = await supabase
+    .from("ordenes_produccion")
+    .update({
+      estado: "perdido",
+      merma_motivo: input.motivo || "otro",
+      merma_nota: input.nota?.trim() ?? "",
+      merma_etapa: orden.estado,
+      fecha_merma: new Date().toISOString(),
+      merma_estado: "abierta",
+      merma_resolucion: null,
+    })
+    .eq("id", id);
+  if (error) return { error: `No se pudo marcar como perdida: ${error.message}` };
+
+  await supabase.from("produccion_historial").insert({
+    orden_id: id,
+    estado_anterior: orden.estado,
+    estado_nuevo: "perdido",
+    usuario: user.email ?? "",
+  });
+
+  if (input.rehacer) {
+    const res = await rehacerOrden(id);
+    if (res?.error)
+      return {
+        error: `Se marcó como perdida, pero no se pudo rehacer: ${res.error}`,
+      };
+  }
+
+  revalidarProduccion();
+  return { ok: true };
+}
+
+/**
+ * Crea una orden nueva, igual a la perdida, para volver a hacerla. Queda en
+ * "Pendiente" con prioridad alta y vinculada a la original. Descuenta otra
+ * prenda del stock. La matriz ya existe, así que su costo no se vuelve a cargar.
+ */
+export async function rehacerOrden(id: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { data: o } = await supabase
+    .from("ordenes_produccion")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (!o) return { error: "No se encontró la orden." };
+  if (o.estado !== "perdido")
+    return { error: "Solo se puede rehacer una orden perdida." };
+  if (o.rehecha_orden_id) return { error: "Esta orden ya se rehízo." };
+
+  const cant = o.cantidad || 1;
+  if (o.product_id) {
+    const { data: variante } = await supabase
+      .from("product_variantes")
+      .select("stock")
+      .eq("product_id", o.product_id)
+      .eq("talle", o.talle || "")
+      .eq("color", o.color || "")
+      .maybeSingle();
+    if (variante && variante.stock < cant)
+      return {
+        error: `No hay stock de esa prenda (talle ${o.talle || "-"}, color ${o.color || "-"}): quedan ${variante.stock}.`,
+      };
+  }
+
+  const costo_matriz = o.matriz_id ? 0 : Number(o.costo_matriz) || 0;
+  const costo_total =
+    (Number(o.costo_prenda) || 0) +
+    costo_matriz +
+    (Number(o.costo_bordado) || 0) +
+    (Number(o.otros_costos) || 0);
+  const aviso = `Rehecha de la orden #${String(o.numero).padStart(5, "0")}.`;
+
+  const { data: nueva, error } = await supabase
+    .from("ordenes_produccion")
+    .insert({
+      pedido_referencia: o.pedido_referencia ?? "",
+      cliente: o.cliente ?? "",
+      cliente_id: o.cliente_id,
+      fecha: new Date().toISOString(),
+      product_id: o.product_id,
+      prenda: o.prenda ?? "",
+      tipo_prenda: o.tipo_prenda ?? "",
+      talle: o.talle ?? "",
+      color: o.color ?? "",
+      cantidad: cant,
+      es_servicio: o.es_servicio ?? false,
+      bordado_descripcion: o.bordado_descripcion ?? "",
+      bordado_ubicacion: o.bordado_ubicacion ?? "",
+      bordado_tamano: o.bordado_tamano ?? "",
+      bordado_colores: o.bordado_colores ?? 0,
+      observaciones: [aviso, o.observaciones].filter(Boolean).join(" "),
+      imagen_ref_path: o.imagen_ref_path,
+      archivo_bordado_path: o.archivo_bordado_path,
+      matriz_id: o.matriz_id,
+      estado: "pendiente",
+      // Ya hay un cliente esperando: la rehecha va primero.
+      prioridad: "alta",
+      fecha_estimada_entrega: o.fecha_estimada_entrega,
+      costo_prenda: Number(o.costo_prenda) || 0,
+      costo_matriz,
+      costo_bordado: Number(o.costo_bordado) || 0,
+      otros_costos: Number(o.otros_costos) || 0,
+      costo_total,
+      origen_merma_id: o.id,
+    })
+    .select("id")
+    .single();
+  if (error || !nueva)
+    return { error: `No se pudo crear la orden nueva: ${error?.message}` };
+
+  if (o.product_id) {
+    await supabase.rpc("descontar_stock_variante", {
+      p_product_id: o.product_id,
+      p_talle: o.talle || "",
+      p_color: o.color || "",
+      p_cantidad: cant,
+    });
+  }
+
+  await supabase.from("produccion_historial").insert({
+    orden_id: nueva.id,
+    estado_anterior: null,
+    estado_nuevo: "pendiente",
+    usuario: user.email ?? "",
+  });
+
+  await supabase
+    .from("ordenes_produccion")
+    .update({ merma_estado: "rehecha", rehecha_orden_id: nueva.id })
+    .eq("id", id);
+
+  revalidarProduccion();
+  return { ok: true };
+}
+
+/** Cierra el seguimiento de una merma indicando qué se hizo con la prenda. */
+export async function cerrarMerma(
+  id: string,
+  resolucion: string,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { error } = await supabase
+    .from("ordenes_produccion")
+    .update({ merma_estado: "cerrada", merma_resolucion: resolucion || null })
+    .eq("id", id)
+    .eq("estado", "perdido");
+  if (error) return { error: `No se pudo cerrar: ${error.message}` };
+
+  revalidarProduccion();
+  return { ok: true };
+}
+
+/**
+ * Deshace una merma cargada por error: la orden vuelve a la etapa en la que
+ * estaba (o a la indicada) y se borran los datos de la merma.
+ */
+export async function volverAProduccion(
+  id: string,
+  estado?: EstadoProduccion,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { data: o } = await supabase
+    .from("ordenes_produccion")
+    .select("estado, merma_etapa, rehecha_orden_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!o) return { error: "No se encontró la orden." };
+  if (o.estado !== "perdido") return { ok: true };
+  if (o.rehecha_orden_id)
+    return {
+      error:
+        "Esta merma ya se rehízo con otra orden. Si fue un error, eliminá la orden nueva primero.",
+    };
+
+  const permitidos: string[] = ["pendiente", "en_produccion", "fabricado", "entregado"];
+  const destino: EstadoProduccion =
+    estado && permitidos.includes(estado)
+      ? estado
+      : permitidos.includes(o.merma_etapa ?? "")
+        ? (o.merma_etapa as EstadoProduccion)
+        : "pendiente";
+
+  const { error } = await supabase
+    .from("ordenes_produccion")
+    .update({
+      estado: destino,
+      merma_motivo: null,
+      merma_nota: "",
+      merma_etapa: null,
+      fecha_merma: null,
+      merma_estado: null,
+      merma_resolucion: null,
+    })
+    .eq("id", id);
+  if (error) return { error: `No se pudo actualizar: ${error.message}` };
+
+  await supabase.from("produccion_historial").insert({
+    orden_id: id,
+    estado_anterior: "perdido",
+    estado_nuevo: destino,
     usuario: user.email ?? "",
   });
 

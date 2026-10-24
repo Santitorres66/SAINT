@@ -17,6 +17,7 @@ const SECCIONES = [
   { href: "/admin/compras", label: "Compras" },
   { href: "/admin/proveedores", label: "Proveedores" },
   { href: "/admin/produccion", label: "Producción" },
+  { href: "/admin/mermas", label: "Mermas" },
   { href: "/admin/galeria", label: "Galería" },
 ];
 

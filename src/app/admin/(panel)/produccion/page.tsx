@@ -4,7 +4,9 @@ import { getOrdenesProduccion } from "@/lib/produccion";
 
 /** Producción / Bordados — tablero de órdenes por estado. */
 export default async function ProduccionPage() {
-  const ordenes = await getOrdenesProduccion();
+  const todas = await getOrdenesProduccion();
+  // Las perdidas viven en la pestaña Mermas.
+  const ordenes = todas.filter((o) => o.estado !== "perdido");
 
   return (
     <div>

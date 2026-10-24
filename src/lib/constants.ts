@@ -460,12 +460,43 @@ export const COLUMNAS_PRODUCCION: {
 
 /**
  * Columnas que se dibujan en el tablero. "Cobrado" es el último eslabón: la
- * orden ya terminó todo el circuito, así que sale del tablero (sigue en la
- * vista de tabla y en el detalle).
+ * orden ya terminó el circuito y sale del tablero (sigue en la vista Tabla).
+ * "Perdido" tampoco va: las mermas se siguen en su propia pestaña.
  */
 export const COLUMNAS_TABLERO = COLUMNAS_PRODUCCION.filter(
-  (c) => c.id !== "cobrado",
+  (c) => c.id !== "cobrado" && c.id !== "perdido",
 );
+
+/** Por qué se perdió una orden. */
+export const MOTIVOS_MERMA = [
+  { value: "prenda_rota", label: "Prenda rota o dañada" },
+  { value: "bordado_mal", label: "Bordado mal hecho" },
+  { value: "diseno", label: "Error de diseño o archivo" },
+  { value: "talle_color", label: "Talle o color equivocado" },
+  { value: "maquina", label: "Falla de máquina" },
+  { value: "otro", label: "Otro" },
+] as const;
+
+export function labelMotivoMerma(value: string | null | undefined): string {
+  return MOTIVOS_MERMA.find((m) => m.value === value)?.label ?? "Sin especificar";
+}
+
+/** Qué se hizo con la prenda perdida al cerrar el caso. */
+export const RESOLUCIONES_MERMA = [
+  { value: "descartada", label: "Descartada" },
+  { value: "segunda", label: "Vendida como segunda" },
+  { value: "reutilizada", label: "Reutilizada" },
+] as const;
+
+export function labelResolucionMerma(value: string | null | undefined): string {
+  return RESOLUCIONES_MERMA.find((r) => r.value === value)?.label ?? "";
+}
+
+export const ESTADOS_MERMA = [
+  { value: "abierta", label: "Abierta", chip: "bg-red-100 text-red-800" },
+  { value: "rehecha", label: "Rehecha", chip: "bg-blue-100 text-blue-800" },
+  { value: "cerrada", label: "Cerrada", chip: "bg-neutral-200 text-neutral-700" },
+] as const;
 
 /** La columna del tablero donde cae una orden según su estado. */
 export function columnaDeEstado(estado: string) {
