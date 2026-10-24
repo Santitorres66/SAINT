@@ -12,6 +12,7 @@ const SECCIONES = [
   { href: "/admin", label: "Tablero" },
   { href: "/admin/productos", label: "Productos" },
   { href: "/admin/ventas", label: "Ventas" },
+  { href: "/admin/cobranzas", label: "Cobranzas" },
   { href: "/admin/clientes", label: "Clientes" },
   { href: "/admin/compras", label: "Compras" },
   { href: "/admin/proveedores", label: "Proveedores" },

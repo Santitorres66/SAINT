@@ -14,6 +14,7 @@ import {
   registrarCobro,
   deleteCobro,
   actualizarDescuentoVenta,
+  saldarVentaSinSaldo,
 } from "@/app/admin/gestion-actions";
 
 function formatFecha(iso: string) {
@@ -92,6 +93,15 @@ export default function CobrosPanel({
     setError(null);
     startTransition(async () => {
       const res = await deleteCobro(id);
+      if (res?.error) setError(res.error);
+      else router.refresh();
+    });
+  }
+
+  function marcarCobrada() {
+    setError(null);
+    startTransition(async () => {
+      const res = await saldarVentaSinSaldo(venta.id);
       if (res?.error) setError(res.error);
       else router.refresh();
     });
@@ -370,6 +380,19 @@ export default function CobrosPanel({
               </button>
             </div>
           </form>
+        ) : venta.estado_cobro !== "cobrado" ? (
+          // Sin saldo pero todavía figura pendiente (ej. venta en $0).
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span>Esta venta no tiene nada para cobrar.</span>
+            <button
+              type="button"
+              onClick={marcarCobrada}
+              disabled={pending}
+              className="rounded-xl bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
+            >
+              {pending ? "Guardando…" : "Marcar como cobrada"}
+            </button>
+          </div>
         ) : (
           <p className="mt-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             Esta venta está saldada. ✓

@@ -28,6 +28,7 @@ function revalidarGestion() {
   revalidatePath("/admin/compras");
   revalidatePath("/admin/ventas");
   revalidatePath("/admin/produccion");
+  revalidatePath("/admin/cobranzas");
   // El stock cambió → refrescamos la web pública
   revalidatePath("/");
   revalidatePath("/tienda");
@@ -81,6 +82,41 @@ async function sincronizarOrdenConVenta(
     estado_nuevo: nuevoEstado,
     usuario,
   });
+}
+
+/**
+ * Una venta sin nada para cobrar (total 0, o descuento igual al total) está
+ * saldada desde que nace. La base solo recalcula el estado cuando se mueve un
+ * cobro o cambia el total, así que una venta que se carga directo en $0 se
+ * quedaba en "pendiente" para siempre: no había saldo para cobrar y tampoco
+ * podía pasar a "cobrado". Acá la cerramos a mano.
+ */
+async function cerrarVentaSinSaldo(
+  supabase: Supa,
+  ventaId: string,
+  usuario: string,
+): Promise<boolean> {
+  const { data: venta } = await supabase
+    .from("ventas")
+    .select("total, descuento, total_cobrado, estado_cobro, fecha")
+    .eq("id", ventaId)
+    .maybeSingle();
+  if (!venta) return false;
+
+  const saldo =
+    Number(venta.total) -
+    Number(venta.descuento ?? 0) -
+    Number(venta.total_cobrado ?? 0);
+  if (saldo > 0.01) return false;
+
+  if (venta.estado_cobro !== "cobrado") {
+    await supabase
+      .from("ventas")
+      .update({ estado_cobro: "cobrado", fecha_cobro: new Date().toISOString() })
+      .eq("id", ventaId);
+  }
+  await sincronizarOrdenConVenta(supabase, ventaId, usuario);
+  return true;
 }
 
 /* ------------------------------ Proveedores ------------------------------ */
@@ -521,6 +557,9 @@ export async function createVentaManual(input: {
     });
   }
 
+  // Venta en $0 (regalo, canje, descuento total): queda cobrada de una.
+  await cerrarVentaSinSaldo(supabase, venta.id, user.email ?? "");
+
   revalidarGestion();
   redirect(ordenId ? "/admin/produccion" : "/admin/ventas");
 }
@@ -703,7 +742,12 @@ export async function registrarCobro(
     Number(venta.total) -
     Number(venta.descuento ?? 0) -
     Number(venta.total_cobrado ?? 0);
-  if (saldo <= 0.01) return { error: "Esta venta ya está saldada." };
+  if (saldo <= 0.01) {
+    // No hay nada que cobrar: nos aseguramos de que figure como cobrada.
+    await cerrarVentaSinSaldo(supabase, ventaId, user.email ?? "");
+    revalidarGestion();
+    return { ok: true };
+  }
   if (monto > saldo + 0.01)
     return {
       error: `El cobro no puede superar el saldo pendiente (${saldo.toFixed(2)}).`,
@@ -725,6 +769,27 @@ export async function registrarCobro(
   await sincronizarOrdenConVenta(supabase, ventaId, user.email ?? "");
 
   revalidarGestion();
+  return { ok: true };
+}
+
+/**
+ * Marca como cobrada una venta que no tiene saldo (por ejemplo, una venta en
+ * $0). Es lo que se usa al pasar a "Cobrado" algo que no tiene nada que cobrar.
+ */
+export async function saldarVentaSinSaldo(
+  ventaId: string,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const ok = await cerrarVentaSinSaldo(supabase, ventaId, user.email ?? "");
+  if (!ok)
+    return {
+      error: 'Esta venta todavía tiene saldo. Registrá el cobro desde "Ventas".',
+    };
+
+  revalidarGestion();
+  revalidatePath("/admin/cobranzas");
   return { ok: true };
 }
 

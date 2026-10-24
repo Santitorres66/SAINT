@@ -27,6 +27,7 @@ import {
   tituloOrden,
 } from "@/lib/constants";
 import { cambiarEstadoProduccion } from "@/app/admin/produccion-actions";
+import { saldarVentaSinSaldo } from "@/app/admin/gestion-actions";
 import ProduccionTabla from "./ProduccionTabla";
 
 /** Las vistas del modulo. El tablero muestra el avance; la tabla, el volumen. */
@@ -334,6 +335,26 @@ export default function ProduccionBoard({
       return;
     }
     if (estado === "cobrado" && actual.venta_id) {
+      // Venta sin saldo (ej. en $0): no hay nada que cobrar, se cierra directo.
+      if (actual.venta_saldo !== null && actual.venta_saldo <= 0.01) {
+        const ventaId = actual.venta_id;
+        setLocal((prev) =>
+          prev.map((o) => (o.id === id ? { ...o, estado } : o)),
+        );
+        startTransition(async () => {
+          const res = await saldarVentaSinSaldo(ventaId);
+          if (res?.error) {
+            setError(res.error);
+            setLocal((prev) =>
+              prev.map((o) =>
+                o.id === id ? { ...o, estado: actual.estado } : o,
+              ),
+            );
+          }
+          router.refresh();
+        });
+        return;
+      }
       router.push(`/admin/ventas?cobrar=${actual.venta_id}`);
       return;
     }

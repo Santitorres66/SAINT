@@ -203,6 +203,118 @@ export async function getVentasUnificadas(): Promise<VentaUnificada[]> {
   );
 }
 
+/* ------------------------------- Cobranzas ------------------------------- */
+
+export interface CobroListado {
+  id: string;
+  fecha: string;
+  cliente: string;
+  monto: number;
+  medio_pago: string;
+  notas: string;
+  canal: "online" | "manual";
+  /** Venta manual a la que pertenece (para abrir su panel de cobros). */
+  venta_id: string | null;
+}
+
+/**
+ * Todo lo cobrado (cobros de ventas manuales + ventas web pagadas), del más
+ * nuevo al más viejo, y lo que falta cobrar agrupado por cliente.
+ */
+export async function getCobranzas(): Promise<{
+  cobros: CobroListado[];
+  pendientes: { cliente: string; saldo: number; ventas: number }[];
+}> {
+  const supabase = await createClient();
+  const [{ data: cobros }, { data: orders }, { data: ventas }] =
+    await Promise.all([
+      supabase
+        .from("cobros")
+        .select("id, fecha, monto, medio_pago, notas, venta_id, ventas(cliente)"),
+      supabase
+        .from("orders")
+        .select("id, created_at, pagado_at, total, comprador, metodo_pago")
+        .eq("status", "approved"),
+      supabase
+        .from("ventas")
+        .select("cliente, total, descuento, total_cobrado")
+        .neq("estado_cobro", "cobrado"),
+    ]);
+
+  type FilaCobro = {
+    id: string;
+    fecha: string;
+    monto: number;
+    medio_pago: string | null;
+    notas: string | null;
+    venta_id: string;
+    ventas: { cliente: string | null } | { cliente: string | null }[] | null;
+  };
+
+  const manuales: CobroListado[] = ((cobros as FilaCobro[]) ?? []).map((c) => {
+    const venta = Array.isArray(c.ventas) ? c.ventas[0] : c.ventas;
+    return {
+      id: c.id,
+      fecha: c.fecha,
+      cliente: venta?.cliente || "—",
+      monto: Number(c.monto) || 0,
+      medio_pago: c.medio_pago || "—",
+      notas: c.notas || "",
+      canal: "manual",
+      venta_id: c.venta_id,
+    };
+  });
+
+  const online: CobroListado[] = (
+    (orders as {
+      id: string;
+      created_at: string;
+      pagado_at: string | null;
+      total: number;
+      comprador: { nombre?: string; email?: string } | null;
+      metodo_pago: string | null;
+    }[]) ?? []
+  ).map((o) => ({
+    id: o.id,
+    fecha: o.pagado_at ?? o.created_at,
+    cliente: o.comprador?.nombre || o.comprador?.email || "Cliente web",
+    monto: Number(o.total) || 0,
+    medio_pago:
+      o.metodo_pago === "transferencia" ? "Transferencia" : "Mercado Pago",
+    notas: "",
+    canal: "online",
+    venta_id: null,
+  }));
+
+  // Cuenta corriente: saldo pendiente por cliente.
+  const porCliente = new Map<string, { saldo: number; ventas: number }>();
+  for (const v of (ventas as {
+    cliente: string | null;
+    total: number;
+    descuento: number;
+    total_cobrado: number;
+  }[]) ?? []) {
+    const saldo = saldoVenta({
+      total: Number(v.total),
+      descuento: Number(v.descuento ?? 0),
+      total_cobrado: Number(v.total_cobrado ?? 0),
+    });
+    if (saldo <= 0.01) continue;
+    const cliente = v.cliente?.trim() || "Sin cliente";
+    const prev = porCliente.get(cliente) ?? { saldo: 0, ventas: 0 };
+    porCliente.set(cliente, { saldo: prev.saldo + saldo, ventas: prev.ventas + 1 });
+  }
+
+  return {
+    cobros: [...manuales, ...online].sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
+    ),
+    pendientes: [...porCliente.entries()]
+      .map(([cliente, d]) => ({ cliente, ...d }))
+      .sort((a, b) => b.saldo - a.saldo),
+  };
+}
+
 /* ------------------------------- Tablero --------------------------------- */
 
 /**
