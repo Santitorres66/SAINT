@@ -73,7 +73,7 @@ se corrió. Confirmado contra la base solo donde lo dice.
 | `pagos-transferencia.sql` | Pago por transferencia | **confirmado** 2026-10-13 |
 | `producto-tela.sql` | Tela como campo propio | publicado 2026-10-15 |
 | `produccion-perdido.sql` | Estado Perdido + Mermas | publicado 2026-10-24 |
-| **`produccion-sin-stock.sql`** | Tomar pedidos sin stock | **pendiente** (2026-10-26) |
+| `produccion-sin-stock.sql` | Tomar pedidos sin stock | **confirmado** 2026-10-27 (lo corrió el usuario) |
 
 Scripts de una sola vez / diagnóstico (no son migraciones):
 `carga-compras-historicas.sql`, `unificar-productos.sql`,
@@ -85,7 +85,6 @@ Scripts de una sola vez / diagnóstico (no son migraciones):
 ### Pendientes / ideas abiertas
 
 - Cargar credenciales de Talo en Vercel (probar primero con `TALO_SANDBOX=1`).
-- Correr `produccion-sin-stock.sql`.
 
 ---
 
@@ -94,6 +93,9 @@ Scripts de una sola vez / diagnóstico (no son migraciones):
 Lo más nuevo arriba.
 
 ### 2026-10-26 — Producción: tomar pedidos aunque no haya stock
+
+Publicado el 2026-10-27 (commit `9c009cf`); `produccion-sin-stock.sql` corrido
+el mismo día.
 
 **Pedido:** poder crear una orden de producción aunque no haya stock de esa
 prenda, con advertencia, y reponer después; mientras no esté la prenda, la
