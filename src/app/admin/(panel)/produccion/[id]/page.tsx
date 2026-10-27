@@ -91,6 +91,12 @@ export default async function DetalleOrdenPage({
               ⚠ Atrasado
             </span>
           )}
+          {(orden.stock_pendiente ?? 0) > 0 && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
+              ⚠ Sin stock: faltan {orden.stock_pendiente} — reponé la prenda
+              para pasarla a producción
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <Link

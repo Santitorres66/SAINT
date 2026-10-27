@@ -141,6 +141,12 @@ function Tarjeta({
             👤 {orden.cliente}
           </p>
         )}
+        {(orden.stock_pendiente ?? 0) > 0 && (
+          <p className="mt-1 rounded-md bg-amber-100 px-2 py-1 text-xs font-medium text-amber-900">
+            ⚠ Sin stock: faltan {orden.stock_pendiente}. Reponé para pasarla a
+            producción.
+          </p>
+        )}
         {orden.fecha_estimada_entrega && (
           <p
             className={`mt-1 text-xs font-medium ${

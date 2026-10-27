@@ -428,6 +428,11 @@ export interface OrdenProduccion {
   posicion: number;
   created_at: string;
   updated_at: string;
+  /**
+   * Unidades que no se pudieron descontar porque no había stock al tomar el
+   * pedido. Mientras sea > 0 la orden no puede pasar a producción.
+   */
+  stock_pendiente?: number;
   /* --- Merma (solo si la orden pasó a "perdido") --- */
   merma_motivo?: string | null;
   merma_nota?: string | null;

@@ -86,6 +86,11 @@ uno depende de los anteriores):
 | 9 | [`supabase/cobros.sql`](./supabase/cobros.sql) | Cobros de ventas y cierre del circuito |
 | 10 | [`supabase/pagos-transferencia.sql`](./supabase/pagos-transferencia.sql) | Pago por transferencia (monto exacto + alias/CVU) |
 
+Después vienen las migraciones de cada función nueva (tela, mermas, pedidos
+sin stock…). La lista completa, con su estado, está en
+[`docs/BITACORA.md`](./docs/BITACORA.md#sql-que-tiene-que-estar-corrido-en-supabase),
+que además registra todo lo que se fue haciendo y por qué.
+
 Para cada uno:
 
 1. En tu proyecto de Supabase, menú izquierdo → **SQL Editor** (ícono `</>`).
@@ -202,6 +207,11 @@ Pendiente → En producción → Fabricado → Entregado → Vendido → Cobrado
 esa prenda sale del stock porque se va a bordar. La venta que después cierra la
 orden **no vuelve a descontarla** — se guarda con `afecta_stock = false`. Sin
 esa bandera, la misma unidad se descontaría dos veces.
+
+**Pedidos sin stock.** Si no hay la prenda, el pedido se puede tomar igual
+(casilla _“Tomar el pedido igual”_). Se descuenta lo que haya y el resto queda
+en `stock_pendiente`: la orden se marca _“Sin stock”_ y no sale de Pendiente
+hasta que se repone. Al moverla a _En producción_ se descuenta lo que faltaba.
 
 **Cómo se avanza.**
 

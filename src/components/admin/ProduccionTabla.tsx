@@ -236,6 +236,11 @@ export default function ProduccionTabla({
                         ⚠ Atrasada
                       </span>
                     )}
+                    {(o.stock_pendiente ?? 0) > 0 && (
+                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+                        Sin stock (faltan {o.stock_pendiente})
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-neutral-500">
                     {[o.bordado_descripcion, detalleOrden(o)]
@@ -301,6 +306,11 @@ export default function ProduccionTabla({
                 {atrasada && (
                   <span className="ml-1 font-medium text-red-600">
                     ⚠ Atrasada
+                  </span>
+                )}
+                {(o.stock_pendiente ?? 0) > 0 && (
+                  <span className="ml-1 font-medium text-amber-700">
+                    ⚠ Sin stock (faltan {o.stock_pendiente})
                   </span>
                 )}
               </p>

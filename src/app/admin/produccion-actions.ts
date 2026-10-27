@@ -56,6 +56,8 @@ type NuevaOrdenInput = {
   costo_matriz: number;
   costo_bordado: number;
   otros_costos: number;
+  /** Tomar el pedido aunque no alcance el stock de la variante. */
+  permitir_sin_stock?: boolean;
 };
 
 async function requireUser() {
@@ -64,6 +66,68 @@ async function requireUser() {
     data: { user },
   } = await supabase.auth.getUser();
   return { supabase, user };
+}
+
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Stock actual de una variante (talle + color). Si no existe, es 0. */
+async function stockVariante(
+  supabase: Supabase,
+  productId: string,
+  talle: string | null,
+  color: string | null,
+): Promise<number> {
+  const { data } = await supabase
+    .from("product_variantes")
+    .select("stock")
+    .eq("product_id", productId)
+    .eq("talle", talle || "")
+    .eq("color", color || "")
+    .maybeSingle();
+  return data?.stock ?? 0;
+}
+
+/**
+ * Descuenta lo que le falta a una orden tomada sin stock, con lo que haya
+ * ahora en la variante. Devuelve cuántas unidades siguen faltando.
+ */
+async function asignarStockPendiente(
+  supabase: Supabase,
+  orden: {
+    id: string;
+    product_id: string | null;
+    talle: string | null;
+    color: string | null;
+    stock_pendiente?: number | null;
+  },
+): Promise<number> {
+  const pendiente = orden.stock_pendiente ?? 0;
+  if (pendiente <= 0 || !orden.product_id) return 0;
+
+  const disponible = await stockVariante(
+    supabase,
+    orden.product_id,
+    orden.talle,
+    orden.color,
+  );
+  const asignar = Math.min(disponible, pendiente);
+  if (asignar <= 0) return pendiente;
+
+  await supabase.rpc("descontar_stock_variante", {
+    p_product_id: orden.product_id,
+    p_talle: orden.talle ?? "",
+    p_color: orden.color ?? "",
+    p_cantidad: asignar,
+  });
+  await supabase
+    .from("ordenes_produccion")
+    .update({ stock_pendiente: pendiente - asignar })
+    .eq("id", orden.id);
+  return pendiente - asignar;
+}
+
+function textoVariante(talle: string | null, color: string | null) {
+  return `talle ${talle || "-"}, color ${color || "-"}`;
 }
 
 /* ------------------------------- Matrices -------------------------------- */
@@ -129,19 +193,22 @@ export async function createOrdenProduccion(
     return { error: "Indicá la prenda (elegí un producto o escribila)." };
   }
 
-  // Verificamos el stock de la VARIANTE exacta (talle + color)
+  // Verificamos el stock de la VARIANTE exacta (talle + color). Si no
+  // alcanza, el pedido se puede tomar igual (con aviso): lo que falta queda
+  // en stock_pendiente y la orden espera a que se reponga la prenda.
   const cant = input.cantidad || 1;
+  let faltante = 0;
   if (input.product_id) {
-    const { data: variante } = await supabase
-      .from("product_variantes")
-      .select("stock")
-      .eq("product_id", input.product_id)
-      .eq("talle", input.talle || "")
-      .eq("color", input.color || "")
-      .maybeSingle();
-    if (variante && variante.stock < cant) {
+    const disponible = await stockVariante(
+      supabase,
+      input.product_id,
+      input.talle,
+      input.color,
+    );
+    faltante = Math.max(cant - disponible, 0);
+    if (faltante > 0 && !input.permitir_sin_stock) {
       return {
-        error: `No hay stock suficiente de esa variante (talle ${input.talle || "-"}, color ${input.color || "-"}): quedan ${variante.stock}.`,
+        error: `No hay stock suficiente de esa variante (${textoVariante(input.talle, input.color)}): quedan ${disponible}. Marcá “Tomar el pedido igual” si querés cargarlo y reponer después.`,
       };
     }
   }
@@ -202,6 +269,9 @@ export async function createOrdenProduccion(
       costo_bordado: input.costo_bordado || 0,
       otros_costos: input.otros_costos || 0,
       costo_total,
+      // Solo se manda si hace falta: así las órdenes comunes se siguen
+      // creando aunque todavía no se haya corrido produccion-sin-stock.sql.
+      ...(faltante > 0 ? { stock_pendiente: faltante } : {}),
     })
     .select("id")
     .single();
@@ -209,13 +279,14 @@ export async function createOrdenProduccion(
   if (error || !orden)
     return { error: `No se pudo crear la orden: ${error?.message}` };
 
-  // Descontamos el stock de la variante (producimos lo que realmente tenemos)
-  if (input.product_id) {
+  // Descontamos de la variante lo que hay; lo que falta se descuenta cuando
+  // se reponga y la orden pase a producción.
+  if (input.product_id && cant - faltante > 0) {
     await supabase.rpc("descontar_stock_variante", {
       p_product_id: input.product_id,
       p_talle: input.talle || "",
       p_color: input.color || "",
-      p_cantidad: cant,
+      p_cantidad: cant - faltante,
     });
   }
 
@@ -339,7 +410,7 @@ export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
 
   const { data: orden } = await supabase
     .from("ordenes_produccion")
-    .select("product_id, cantidad, talle, color, venta_id")
+    .select("*")
     .eq("id", id)
     .single();
 
@@ -357,13 +428,15 @@ export async function deleteOrdenProduccion(id: string): Promise<ActionResult> {
     .eq("id", id);
   if (error) return { error: `No se pudo eliminar: ${error.message}` };
 
-  // Devolvemos a la variante lo que la orden había descontado
-  if (orden?.product_id) {
+  // Devolvemos a la variante lo que la orden había descontado (si se tomó
+  // sin stock, lo pendiente nunca salió de la variante)
+  const devolver = (orden?.cantidad ?? 1) - (orden?.stock_pendiente ?? 0);
+  if (orden?.product_id && devolver > 0) {
     await supabase.rpc("sumar_stock_variante", {
       p_product_id: orden.product_id,
       p_talle: orden.talle ?? "",
       p_color: orden.color ?? "",
-      p_cantidad: orden.cantidad ?? 1,
+      p_cantidad: devolver,
     });
   }
 
@@ -388,7 +461,7 @@ export async function cambiarEstadoProduccion(
 
   const { data: orden } = await supabase
     .from("ordenes_produccion")
-    .select("estado, fecha_inicio, fecha_fabricacion, venta_id")
+    .select("*")
     .eq("id", id)
     .single();
   if (!orden) return { error: "No se encontró la orden." };
@@ -430,6 +503,19 @@ export async function cambiarEstadoProduccion(
       error:
         "Esta orden ya tiene una venta cargada. Eliminá la venta si querés volver atrás.",
     };
+
+  // Una orden tomada sin stock no puede salir de "Pendiente" sin la prenda:
+  // si ya se repuso, se descuenta ahora lo que faltaba.
+  const trabajando: string[] = ["en_produccion", "fabricado", "entregado"];
+  if (trabajando.includes(nuevoEstado) && (orden.stock_pendiente ?? 0) > 0) {
+    const faltan = await asignarStockPendiente(supabase, orden);
+    if (faltan > 0) {
+      revalidarProduccion();
+      return {
+        error: `Todavía no hay stock de esta prenda (${textoVariante(orden.talle, orden.color)}): faltan ${faltan}. Reponela con una compra o corrigiendo el stock y volvé a moverla.`,
+      };
+    }
+  }
 
   const ahora = new Date().toISOString();
   const updates: Record<string, unknown> = { estado: nuevoEstado };
@@ -521,7 +607,7 @@ export async function marcarPerdida(
 /**
  * Crea una orden nueva, igual a la perdida, para volver a hacerla. Queda en
  * "Pendiente" con prioridad alta y vinculada a la original. Descuenta otra
- * prenda del stock. La matriz ya existe, así que su costo no se vuelve a cargar.
+ * prenda del stock (si no hay, queda esperando que se reponga). La matriz ya existe, así que su costo no se vuelve a cargar.
  */
 export async function rehacerOrden(id: string): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
@@ -537,20 +623,12 @@ export async function rehacerOrden(id: string): Promise<ActionResult> {
     return { error: "Solo se puede rehacer una orden perdida." };
   if (o.rehecha_orden_id) return { error: "Esta orden ya se rehízo." };
 
+  // Ya hay un cliente esperando: si no hay prenda, la orden nueva se toma
+  // igual y queda esperando stock, como cualquier pedido tomado sin stock.
   const cant = o.cantidad || 1;
-  if (o.product_id) {
-    const { data: variante } = await supabase
-      .from("product_variantes")
-      .select("stock")
-      .eq("product_id", o.product_id)
-      .eq("talle", o.talle || "")
-      .eq("color", o.color || "")
-      .maybeSingle();
-    if (variante && variante.stock < cant)
-      return {
-        error: `No hay stock de esa prenda (talle ${o.talle || "-"}, color ${o.color || "-"}): quedan ${variante.stock}.`,
-      };
-  }
+  const faltante = o.product_id
+    ? Math.max(cant - (await stockVariante(supabase, o.product_id, o.talle, o.color)), 0)
+    : 0;
 
   const costo_matriz = o.matriz_id ? 0 : Number(o.costo_matriz) || 0;
   const costo_total =
@@ -592,18 +670,19 @@ export async function rehacerOrden(id: string): Promise<ActionResult> {
       otros_costos: Number(o.otros_costos) || 0,
       costo_total,
       origen_merma_id: o.id,
+      ...(faltante > 0 ? { stock_pendiente: faltante } : {}),
     })
     .select("id")
     .single();
   if (error || !nueva)
     return { error: `No se pudo crear la orden nueva: ${error?.message}` };
 
-  if (o.product_id) {
+  if (o.product_id && cant - faltante > 0) {
     await supabase.rpc("descontar_stock_variante", {
       p_product_id: o.product_id,
       p_talle: o.talle || "",
       p_color: o.color || "",
-      p_cantidad: cant,
+      p_cantidad: cant - faltante,
     });
   }
 

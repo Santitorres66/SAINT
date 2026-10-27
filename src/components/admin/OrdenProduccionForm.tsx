@@ -120,7 +120,9 @@ export default function OrdenProduccionForm({
     orden?.otros_costos ? String(orden.otros_costos) : "",
   );
 
-  // Cascada: modelo (nombre) → color (producto) → talle (variante), solo con stock
+  // Cascada: modelo (nombre) → color (producto) → talle (variante). Se listan
+  // también las que no tienen stock: el pedido se puede tomar igual, con
+  // aviso, y queda esperando que se reponga la prenda.
   const modelos = useMemo(() => {
     const m = new Map<
       string,
@@ -135,26 +137,51 @@ export default function OrdenProduccionForm({
       e.stock += p.stock;
       m.set(p.nombre, e);
     });
-    return [...m.values()]
-      .filter((x) => x.stock > 0)
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    // Primero lo que hay en stock, después lo que habría que reponer
+    return [...m.values()].sort(
+      (a, b) =>
+        Number(b.stock > 0) - Number(a.stock > 0) ||
+        a.nombre.localeCompare(b.nombre),
+    );
   }, [products]);
 
   const coloresModelo = useMemo(() => {
     if (!modelo || modelo === "__mano__") return [];
     return products
-      .filter((p) => p.nombre === modelo && p.stock > 0)
+      .filter((p) => p.nombre === modelo)
       .map((p) => ({ color: p.colores[0] ?? "", productId: p.id, stock: p.stock }))
       .sort((a, b) => a.color.localeCompare(b.color));
   }, [products, modelo]);
 
+  // Los talles del producto más los que tengan variante cargada, con su stock
+  // (0 si la variante no existe todavía).
   const tallesColor = useMemo(() => {
     if (!productId) return [];
-    return variantes
-      .filter((v) => v.product_id === productId && v.stock > 0)
-      .map((v) => ({ talle: v.talle, stock: v.stock }))
+    const stock = new Map<string, number>();
+    products
+      .find((p) => p.id === productId)
+      ?.talles.forEach((t) => stock.set(t, 0));
+    variantes
+      .filter((v) => v.product_id === productId)
+      .forEach((v) => stock.set(v.talle, (stock.get(v.talle) ?? 0) + v.stock));
+    return [...stock.entries()]
+      // El talle vacío (prenda sin talles) solo se lista si tiene stock,
+      // como antes: si no, pediría elegir un talle que no existe.
+      .filter(([talle, s]) => talle !== "" || s > 0)
+      .map(([talle, s]) => ({ talle, stock: s }))
       .sort((a, b) => a.talle.localeCompare(b.talle));
-  }, [variantes, productId]);
+  }, [products, variantes, productId]);
+
+  // Aviso de stock para la variante elegida
+  const [sinStock, setSinStock] = useState(false);
+  const stockElegido =
+    productId && (talle || tallesColor.length === 0)
+      ? tallesColor.find((t) => t.talle === talle)?.stock ?? 0
+      : null;
+  const faltante =
+    stockElegido === null
+      ? 0
+      : Math.max((Number(cantidad) || 1) - stockElegido, 0);
 
   const esManual = modelo === "__mano__";
 
@@ -179,8 +206,13 @@ export default function OrdenProduccionForm({
     const p = products.find((x) => x.id === pid);
     setColor(p?.colores[0] ?? "");
     setCostoPrenda(String(p?.costo || ""));
-    const ts = variantes.filter((v) => v.product_id === pid && v.stock > 0);
-    setTalle(ts.length === 1 ? ts[0].talle : "");
+    const ts = new Set(
+      [
+        ...(p?.talles ?? []),
+        ...variantes.filter((v) => v.product_id === pid).map((v) => v.talle),
+      ].filter(Boolean),
+    );
+    setTalle(ts.size === 1 ? [...ts][0] : "");
   }
 
   function cambiarMatrizModo(modo: MatrizModo) {
@@ -207,6 +239,12 @@ export default function OrdenProduccionForm({
       }
       if (tallesColor.length > 0 && !talle) {
         setError("Elegí el talle.");
+        return;
+      }
+      if (faltante > 0 && !sinStock) {
+        setError(
+          "No hay stock suficiente de esa prenda. Marcá “Tomar el pedido igual” para cargarlo y reponer después.",
+        );
         return;
       }
     }
@@ -264,6 +302,7 @@ export default function OrdenProduccionForm({
             talle,
             color,
             cantidad: Number(cantidad) || 1,
+            permitir_sin_stock: sinStock,
           });
       if (res?.error) setError(res.error);
     });
@@ -427,7 +466,7 @@ export default function OrdenProduccionForm({
           </div>
         ) : (
           <>
-            {/* 1) Modelo (siempre trae lo que hay en stock) */}
+            {/* 1) Modelo (primero lo que hay en stock) */}
             <div>
               <label className={label}>
                 {esServicio ? "Prenda sobre la que se borda" : "Prenda"}
@@ -437,7 +476,7 @@ export default function OrdenProduccionForm({
                   ...modelos.map((m) => ({
                     value: m.nombre,
                     label: m.nombre,
-                    detalle: `${m.stock} en stock`,
+                    detalle: m.stock > 0 ? `${m.stock} en stock` : "sin stock",
                   })),
                   { value: "__mano__", label: "Otra (escribir a mano)" },
                 ]}
@@ -508,7 +547,7 @@ export default function OrdenProduccionForm({
           </div>
         )}
 
-        {/* 2) Con producto: color → talle (solo con stock) */}
+        {/* 2) Con producto: color → talle (con su stock, aunque sea 0) */}
         {!editando && modelo && !esManual && (
           <div className="grid gap-6 sm:grid-cols-4">
             <div>
@@ -521,7 +560,7 @@ export default function OrdenProduccionForm({
                 <option value="">Elegir color</option>
                 {coloresModelo.map((c) => (
                   <option key={c.productId} value={c.productId}>
-                    {c.color || "—"} ({c.stock} en stock)
+                    {c.color || "—"} ({c.stock > 0 ? `${c.stock} en stock` : "sin stock"})
                   </option>
                 ))}
               </select>
@@ -537,7 +576,7 @@ export default function OrdenProduccionForm({
                 <option value="">Elegir talle</option>
                 {tallesColor.map((t) => (
                   <option key={t.talle} value={t.talle}>
-                    {t.talle || "Único"} ({t.stock} en stock)
+                    {t.talle || "Único"} ({t.stock > 0 ? `${t.stock} en stock` : "sin stock"})
                   </option>
                 ))}
               </select>
@@ -557,6 +596,32 @@ export default function OrdenProduccionForm({
                 Se descuenta esta variante del stock al crear la orden.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Aviso: no alcanza el stock de la variante elegida */}
+        {!editando && modelo && !esManual && faltante > 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-medium">
+              ⚠ No hay stock suficiente de esta prenda: hay {stockElegido}, el
+              pedido necesita {Number(cantidad) || 1}.
+            </p>
+            <p className="mt-1 text-xs text-amber-800">
+              Podés tomar el pedido igual. Se descuenta lo que haya y faltan{" "}
+              {faltante}: la orden queda en “Pendiente” marcada como{" "}
+              <strong>sin stock</strong> y no se puede pasar a producción hasta
+              que repongas la prenda (con una compra o corrigiendo el stock).
+              Cuando la muevas a “En producción”, se descuenta en ese momento.
+            </p>
+            <label className="mt-3 flex items-center gap-2 font-medium">
+              <input
+                type="checkbox"
+                checked={sinStock}
+                onChange={(e) => setSinStock(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Tomar el pedido igual
+            </label>
           </div>
         )}
       </section>
