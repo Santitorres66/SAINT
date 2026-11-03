@@ -321,14 +321,24 @@ export default async function DetalleOrdenPage({
                   />
                 </dl>
 
-                <Link
-                  href={`/admin/ventas?cobrar=${orden.venta_id}`}
-                  className="inline-block rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
-                >
-                  {(orden.venta_saldo ?? 0) > 0
-                    ? "Registrar cobro"
-                    : "Ver cobros"}
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/admin/ventas?cobrar=${orden.venta_id}`}
+                    className="inline-block rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+                  >
+                    {(orden.venta_saldo ?? 0) > 0
+                      ? "Registrar cobro"
+                      : "Ver cobros"}
+                  </Link>
+                  {/* Para corregir el precio (p. ej. una venta cargada en $0
+                      por error, que quedó cobrada sola). */}
+                  <Link
+                    href={`/admin/ventas/editar/${orden.venta_id}`}
+                    className="inline-block rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+                  >
+                    Editar venta
+                  </Link>
+                </div>
               </div>
             )}
           </section>

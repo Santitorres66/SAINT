@@ -653,11 +653,23 @@ export async function updateVentaManual(
     }
   }
 
-  // El total cambió → la base recalculó el estado de cobro. Reflejarlo.
-  await sincronizarOrdenConVenta(supabase, id, user.email ?? "");
+  // El estado de cobro se recalcula siempre desde los cobros reales: el
+  // trigger de la base solo corre si cambió el total o el descuento, y una
+  // venta que se cargó en $0 por error quedó marcada "cobrada" a mano. Al
+  // corregirle el precio tiene que volver a "pendiente" (y su orden a Vendido).
+  await supabase.rpc("recalcular_cobro_venta", { p_venta_id: id });
+  const saldada = await cerrarVentaSinSaldo(supabase, id, user.email ?? "");
+  if (!saldada) await sincronizarOrdenConVenta(supabase, id, user.email ?? "");
+
+  // Si la venta cierra una orden, se vuelve a la orden (de ahí se vino).
+  const { data: orden } = await supabase
+    .from("ordenes_produccion")
+    .select("id")
+    .eq("venta_id", id)
+    .maybeSingle();
 
   revalidarGestion();
-  redirect("/admin/ventas");
+  redirect(orden ? `/admin/produccion/${orden.id}` : "/admin/ventas");
 }
 
 export async function deleteVentaManual(id: string): Promise<ActionResult> {

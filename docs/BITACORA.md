@@ -92,6 +92,33 @@ Scripts de una sola vez / diagnóstico (no son migraciones):
 
 Lo más nuevo arriba.
 
+### 2026-11-03 — Producción: corregir una venta cargada en $0 por error
+
+**Pedido:** la orden #00091 (Remera Oversize, Jose Cabral) se vendió en $0
+por error; como una venta en $0 queda cobrada sola, pasó a Cobrado y desde
+Producción no había forma de volver atrás ni de editarle el precio (era
+$24.000).
+
+**Cómo quedó:**
+
+- El detalle de la orden (sección "Venta y cobro") tiene el botón
+  **Editar venta**, al lado de "Registrar cobro / Ver cobros". Antes editar
+  solo se podía desde la pestaña Ventas.
+- Al guardar la edición, el estado de cobro se **recalcula siempre** desde
+  los cobros reales (`recalcular_cobro_venta`): si se pasa de $0 a $24.000,
+  la venta vuelve a "pendiente de cobro" y la orden a **Vendido**, lista para
+  "Cobrar". Si queda en $0, sigue cobrada.
+- Si la venta cierra una orden, al guardar se vuelve al detalle de esa orden
+  (antes iba siempre a Ventas).
+
+**Decisiones:** no se agregó un "deshacer cobrado" aparte: el error real es
+el precio, y corrigiéndolo el estado sale solo de los números (no se puede
+desincronizar). El trigger de la base ya recalculaba al cambiar el total; la
+llamada explícita cubre el caso en que no cambie el total o el descuento.
+
+**Archivos:** `src/app/admin/gestion-actions.ts` (`updateVentaManual`),
+`src/app/admin/(panel)/produccion/[id]/page.tsx`. Sin SQL nuevo.
+
 ### 2026-10-26 — Producción: tomar pedidos aunque no haya stock
 
 Publicado el 2026-10-27 (commit `9c009cf`); `produccion-sin-stock.sql` corrido
