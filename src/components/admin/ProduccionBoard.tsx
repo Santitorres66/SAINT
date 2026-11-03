@@ -34,6 +34,7 @@ import {
 } from "@/app/admin/produccion-actions";
 import { saldarVentaSinSaldo } from "@/app/admin/gestion-actions";
 import ProduccionTabla from "./ProduccionTabla";
+import Buscador from "./Buscador";
 
 /** Las vistas del modulo. El tablero muestra el avance; la tabla, el volumen. */
 type Vista = "tablero" | "tabla";
@@ -716,18 +717,16 @@ export default function ProduccionBoard({
           </select>
         )}
         {clientesConOrden.length > 0 && (
-          <select
+          // Con buscador: la lista de clientes no para de crecer.
+          <Buscador
+            compacto
+            opciones={clientesConOrden.map((c) => ({ value: c, label: c }))}
             value={fCliente}
-            onChange={(e) => setFCliente(e.target.value)}
-            className="max-w-[220px] rounded-lg border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-neutral-900"
-          >
-            <option value="">Todos los clientes</option>
-            {clientesConOrden.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onSelect={(o) => setFCliente(o?.value ?? "")}
+            placeholder="Todos los clientes"
+            vacio="Todos los clientes"
+            className="w-56"
+          />
         )}
         <select
           value={fPrioridad}

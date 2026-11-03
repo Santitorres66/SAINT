@@ -92,6 +92,30 @@ Scripts de una sola vez / diagnóstico (no son migraciones):
 
 Lo más nuevo arriba.
 
+### 2026-11-03 — Filtro de cliente con buscador
+
+**Pedido:** que el filtro de cliente deje buscar (como el segmentador de
+Power BI), porque la lista va a crecer mucho.
+
+**Cómo quedó:** el filtro de cliente de **Producción** (Tablero y Tabla),
+**Ventas** y el **Tablero** de inicio pasó de un `<select>` a un campo que se
+escribe y va filtrando ("cab" → Diego Cabral, Jose Cabral). Sin escribir
+nada muestra la lista completa; la primera opción y la ✕ vuelven a "Todos
+los clientes". Flechas + Enter para elegir con el teclado. Busca por
+palabras, sin acentos ni mayúsculas. En Ventas, al costado de cada cliente
+figura la cantidad de ventas.
+
+**Decisiones:** se reusó `Buscador` (el de los formularios de compra/venta)
+con una variante `compacto` del tamaño de los filtros, en vez de hacer otro
+componente. Sigue siendo de **un** cliente a la vez (no multiselección con
+casillas como Power BI): todos los filtros del panel son de un valor y así
+no cambia la lógica de filtrado. Si hace falta elegir varios, se suma.
+
+**Archivos:** `src/components/admin/Buscador.tsx`,
+`src/components/admin/ProduccionBoard.tsx`,
+`src/components/admin/VentasList.tsx`,
+`src/components/admin/AnaliticaVentas.tsx`. Sin SQL.
+
 ### 2026-11-03 — Producción: corregir una venta cargada en $0 por error
 
 **Pedido:** la orden #00091 (Remera Oversize, Jose Cabral) se vendió en $0

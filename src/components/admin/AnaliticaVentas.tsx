@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { OrderItem } from "@/lib/types";
+import Buscador from "./Buscador";
 import {
   formatPrecio,
   labelCategoria,
@@ -305,18 +306,15 @@ export default function AnaliticaVentas({
 
           <label className="ml-auto flex items-center gap-2 text-sm text-neutral-500">
             Cliente
-            <select
-              value={cliente}
-              onChange={(e) => setCliente(e.target.value)}
-              className="max-w-[16rem] rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-neutral-900"
-            >
-              <option value={TODOS}>Todos los clientes</option>
-              {clientes.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <Buscador
+              compacto
+              opciones={clientes.map((c) => ({ value: c, label: c }))}
+              value={cliente === TODOS ? "" : cliente}
+              onSelect={(o) => setCliente(o?.value || TODOS)}
+              placeholder="Todos los clientes"
+              vacio="Todos los clientes"
+              className="w-64 text-neutral-800"
+            />
           </label>
         </div>
 

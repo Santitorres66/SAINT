@@ -15,6 +15,7 @@ import {
 import { describirBordado } from "@/lib/bordado";
 import { deleteVentaManual } from "@/app/admin/gestion-actions";
 import CobrosPanel from "@/components/admin/CobrosPanel";
+import Buscador from "@/components/admin/Buscador";
 
 function formatFecha(iso: string) {
   return new Intl.DateTimeFormat("es-AR", {
@@ -212,18 +213,19 @@ export default function VentasList({
         {clientes.length > 0 && (
           <label className="ml-auto flex items-center gap-2 text-sm text-neutral-500">
             Cliente
-            <select
-              value={cliente}
-              onChange={(e) => setCliente(e.target.value)}
-              className="max-w-[16rem] rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-neutral-900"
-            >
-              <option value={TODOS_CLIENTES}>Todos los clientes</option>
-              {clientes.map(([nombre, n]) => (
-                <option key={nombre} value={nombre}>
-                  {nombre} ({n})
-                </option>
-              ))}
-            </select>
+            <Buscador
+              compacto
+              opciones={clientes.map(([nombre, n]) => ({
+                value: nombre,
+                label: nombre,
+                detalle: String(n),
+              }))}
+              value={cliente === TODOS_CLIENTES ? "" : cliente}
+              onSelect={(o) => setCliente(o?.value || TODOS_CLIENTES)}
+              placeholder="Todos los clientes"
+              vacio="Todos los clientes"
+              className="w-64 text-neutral-800"
+            />
           </label>
         )}
       </div>

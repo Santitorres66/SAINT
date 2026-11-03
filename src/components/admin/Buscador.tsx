@@ -34,6 +34,7 @@ export default function Buscador({
   id,
   className = "",
   disabled = false,
+  compacto = false,
 }: {
   opciones: OpcionBuscador[];
   /** El `value` de la opción elegida, o "" si no hay ninguna. */
@@ -57,6 +58,11 @@ export default function Buscador({
   id?: string;
   className?: string;
   disabled?: boolean;
+  /**
+   * Del tamaño de los filtros de las listas (Producción, Ventas, Tablero), en
+   * lugar del de un campo de formulario.
+   */
+  compacto?: boolean;
 }) {
   const generado = useId();
   const idCampo = id ?? generado;
@@ -152,8 +158,9 @@ export default function Buscador({
     nodo?.scrollIntoView({ block: "nearest" });
   }, [resaltado, abierto]);
 
-  const base =
-    "w-full rounded-lg border border-neutral-300 px-4 py-3 text-base outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 disabled:bg-neutral-100";
+  const base = `w-full rounded-lg border border-neutral-300 pl-4 pr-9 outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 disabled:bg-neutral-100 ${
+    compacto ? "py-2.5 text-sm" : "py-3 text-base"
+  }`;
 
   return (
     <div ref={caja} className={`relative ${className}`}>
