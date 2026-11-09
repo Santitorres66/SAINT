@@ -75,7 +75,7 @@ se corrió. Confirmado contra la base solo donde lo dice.
 | `producto-tela.sql` | Tela como campo propio | publicado 2026-10-15 |
 | `produccion-perdido.sql` | Estado Perdido + Mermas | publicado 2026-10-24 |
 | `produccion-sin-stock.sql` | Tomar pedidos sin stock | **confirmado** 2026-10-27 (lo corrió el usuario) |
-| `caja-socios.sql` | Socios, pagos de compras y Caja | **pendiente** (2026-11-09) — sin esto no se pueden cargar compras con pago |
+| `caja-socios.sql` | Socios, pagos de compras y Caja | **confirmado** 2026-11-09 (lo corrió el usuario) |
 
 Scripts de una sola vez / diagnóstico (no son migraciones):
 `carga-compras-historicas.sql`, `unificar-productos.sql`,
@@ -102,6 +102,8 @@ Scripts de una sola vez / diagnóstico (no son migraciones):
 Lo más nuevo arriba.
 
 ### 2026-11-09 — Compras: quién pone la plata y cuotas · nueva sección Caja
+
+Publicado el 2026-11-09 (commit `d50b218`); `caja-socios.sql` corrido el mismo día.
 
 **Pedido:** (1) registrar a los socios con DNI; (2) que cada compra diga de
 dónde salió la plata, porque a veces SAINT no llega y ponen los socios (ej.:
