@@ -1,10 +1,10 @@
 import Link from "next/link";
 import ComprasList from "@/components/admin/ComprasList";
-import { getCompras } from "@/lib/gestion";
+import { getCompras, getSocios } from "@/lib/gestion";
 
 /** Listado de compras a proveedores. */
 export default async function ComprasPage() {
-  const compras = await getCompras();
+  const [compras, socios] = await Promise.all([getCompras(), getSocios()]);
 
   return (
     <div>
@@ -24,7 +24,7 @@ export default async function ComprasPage() {
         </Link>
       </div>
 
-      <ComprasList compras={compras} />
+      <ComprasList compras={compras} socios={socios} />
     </div>
   );
 }

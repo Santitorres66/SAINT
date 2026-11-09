@@ -3,6 +3,8 @@ import type {
   Proveedor,
   Compra,
   CompraItem,
+  CompraPago,
+  Socio,
   Cobro,
   VentaManual,
   VentaUnificada,
@@ -39,36 +41,67 @@ export async function getProveedorById(id: string): Promise<Proveedor | null> {
 
 /* -------------------------------- Compras -------------------------------- */
 
-export async function getCompras(): Promise<Compra[]> {
+type FilaCompraJoin = Compra & {
+  proveedores: { nombre: string } | null;
+  compra_pagos?: CompraPago[] | null;
+};
+
+function armarCompra(c: FilaCompraJoin): Compra {
+  const { proveedores, compra_pagos, ...resto } = c;
+  return {
+    ...resto,
+    proveedor_nombre: proveedores?.nombre ?? null,
+    // undefined (no [] ) cuando la tabla de pagos todavía no existe: así la
+    // pantalla no muestra todas las compras como impagas.
+    pagos: compra_pagos
+      ?.map((p) => ({ ...p, monto: Number(p.monto) || 0 }))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha)),
+  };
+}
+
+/**
+ * Trae las compras con sus pagos. Si `caja-socios.sql` todavía no se corrió
+ * la tabla de pagos no existe: en ese caso se vuelve a pedir sin pagos, para
+ * que Compras siga andando igual que antes.
+ */
+async function leerCompras(id?: string): Promise<FilaCompraJoin[]> {
   const supabase = await createClient();
-  // Traemos la compra junto al nombre del proveedor
-  const { data, error } = await supabase
-    .from("compras")
-    .select("*, proveedores(nombre)")
-    .order("fecha", { ascending: false });
-  if (error) {
-    console.warn("getCompras:", error.message);
+  const pedir = (select: string) => {
+    let q = supabase.from("compras").select(select);
+    if (id) q = q.eq("id", id);
+    return q.order("fecha", { ascending: false });
+  };
+  const conPagos = await pedir("*, proveedores(nombre), compra_pagos(*)");
+  if (!conPagos.error)
+    return (conPagos.data as unknown as FilaCompraJoin[]) ?? [];
+
+  const sinPagos = await pedir("*, proveedores(nombre)");
+  if (sinPagos.error) {
+    console.warn("getCompras:", sinPagos.error.message);
     return [];
   }
-  return (
-    (data as (Compra & { proveedores: { nombre: string } | null })[]) ?? []
-  ).map((c) => ({
-    ...c,
-    proveedor_nombre: c.proveedores?.nombre ?? null,
-  }));
+  return (sinPagos.data as unknown as FilaCompraJoin[]) ?? [];
+}
+
+export async function getCompras(): Promise<Compra[]> {
+  return (await leerCompras()).map(armarCompra);
 }
 
 export async function getCompraById(id: string): Promise<Compra | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("compras")
-    .select("*, proveedores(nombre)")
-    .eq("id", id)
-    .maybeSingle();
-  if (!data) return null;
+  const [c] = await leerCompras(id);
+  return c ? armarCompra(c) : null;
+}
 
-  const c = data as Compra & { proveedores: { nombre: string } | null };
-  return { ...c, proveedor_nombre: c.proveedores?.nombre ?? null };
+/* -------------------------------- Socios --------------------------------- */
+
+export async function getSocios(): Promise<Socio[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("socios")
+    .select("id, nombre, dni, activo")
+    .order("nombre", { ascending: true });
+  if (error) return [];
+  return (data as Socio[]) ?? [];
 }
 
 /* -------------------------------- Ventas --------------------------------- */

@@ -37,7 +37,8 @@ TypeScript + Tailwind + Supabase.
 | Mermas | Órdenes perdidas: motivo, etapa, rehacer, cerrar con resolución |
 | Ventas | Manuales + web, filtros por canal/rubro/cliente con estado de cuenta, confirmar transferencias |
 | Cobranzas | Todo lo cobrado + cuenta corriente por cliente, recordatorio por WhatsApp |
-| Compras | Mercadería / insumos / activos fijos, medio de pago y cuotas, editar |
+| Caja | Disponible (Brubank + efectivo), saldo día a día, control contra Brubank, socios, compras por pagar |
+| Compras | Mercadería / insumos / activos fijos, cuotas, **quién pagó (SAINT o socios)** y pagos de cuotas |
 | Clientes, Proveedores, Galería | ABM; la galería alimenta `/galeria` y la home |
 
 **El circuito de un pedido**
@@ -74,6 +75,7 @@ se corrió. Confirmado contra la base solo donde lo dice.
 | `producto-tela.sql` | Tela como campo propio | publicado 2026-10-15 |
 | `produccion-perdido.sql` | Estado Perdido + Mermas | publicado 2026-10-24 |
 | `produccion-sin-stock.sql` | Tomar pedidos sin stock | **confirmado** 2026-10-27 (lo corrió el usuario) |
+| `caja-socios.sql` | Socios, pagos de compras y Caja | **pendiente** (2026-11-09) — sin esto no se pueden cargar compras con pago |
 
 Scripts de una sola vez / diagnóstico (no son migraciones):
 `carga-compras-historicas.sql`, `unificar-productos.sql`,
@@ -85,12 +87,125 @@ Scripts de una sola vez / diagnóstico (no son migraciones):
 ### Pendientes / ideas abiertas
 
 - Cargar credenciales de Talo en Vercel (probar primero con `TALO_SANDBOX=1`).
+- Caja recién estrenada (2026-11-09): registrar las cuotas ya pagadas de la
+  bordadora, corregir las compras que pagaron los socios (hoy figuran como
+  pagadas por SAINT) y hacer el primer control con Brubank para el ajuste
+  inicial.
+
+**Socios de SAINT:** Diego Cabral (DNI 35654566) y Santiago Torres
+(DNI 36433456). Están en la tabla `socios`.
 
 ---
 
 ## Historial
 
 Lo más nuevo arriba.
+
+### 2026-11-09 — Compras: quién pone la plata y cuotas · nueva sección Caja
+
+**Pedido:** (1) registrar a los socios con DNI; (2) que cada compra diga de
+dónde salió la plata, porque a veces SAINT no llega y ponen los socios (ej.:
+compra de 100 → 50 SAINT, 25 Diego, 25 Santi); hasta ahora se anotaba en el
+detalle; (3) poder registrar compras en plazos y seguir pagándolas (la
+bordadora, 24 cuotas, estaba cargada como una sola compra); (4) una sección
+**Caja** con el disponible, para comparar siempre con Brubank, y cómo cambia
+día a día (lo cobrado menos lo pagado).
+
+**Cómo quedó:**
+
+- **Socios:** tabla `socios` con Diego Cabral (35654566) y Santiago Torres
+  (36433456).
+- **Pagos de compras** (tabla `compra_pagos`): cada salida de plata hacia una
+  compra es una fila con monto, fecha, medio y **quién pagó** (SAINT o un
+  socio). Lo pagado y el saldo salen de sumar los pagos.
+  - Al cargar una compra, sección **"¿De dónde sale la plata?"** con un monto
+    para SAINT y uno por socio. De contado arranca todo en SAINT; botones
+    "Todo SAINT", "Mitad SAINT, mitad socios" y "Nada todavía". Muestra lo
+    pagado y lo que queda; no deja pasarse del total.
+  - **Cuotas / plazos** se ofrecen con cualquier medio de pago (antes solo
+    tarjeta de crédito). En cuotas el reparto arranca en 0.
+  - En el listado cada compra muestra **Pagada / Cuota 7/24 · falta $X / Sin
+    pagar** y "Pusieron socios" si corresponde. Botón **Pagos** → panel con el
+    resumen (cuánto puso cada uno), la lista de pagos (se pueden quitar) y el
+    formulario para registrar un pago o **varias cuotas de una** (crea una por
+    mes desde la fecha elegida, así la caja las ve en su día).
+  - Editar una compra no toca los pagos (se manejan desde el panel).
+- **Caja** (`/admin/caja`, en el menú después de Cobranzas):
+  - Disponible total, en Brubank y en efectivo; neto del período (cobrado −
+    pagado ± otros). Períodos 30 / 90 días / 1 año / todo.
+  - **Gráfico del saldo día a día** (con tooltip por día) y tabla **día por
+    día**: cobrado, pagado, otros, neto y saldo al cierre.
+  - **Control con Brubank:** se escribe el saldo real, muestra la diferencia
+    al instante y qué puede faltar cargar; "Guardar control" deja historial
+    (`caja_controles`) y "Guardar y ajustar el sistema" además carga un
+    ajuste por la diferencia.
+  - **Cargar movimiento:** aporte / devolución / retiro de un socio, gasto,
+    otro ingreso, depósito de efectivo en Brubank (dos patas, se borran
+    juntas) y ajuste (`caja_movimientos`).
+  - **Socios:** cuánto puso cada uno en compras, aportes, devoluciones y
+    cuánto le debe SAINT.
+  - **Compras por pagar:** saldo pendiente por compra, con la cuota en que va.
+  - Lista de movimientos del período; los manuales se pueden quitar.
+
+**Decisiones:**
+
+- La caja **no guarda un saldo**: se calcula siempre de cobros + ventas web
+  pagadas − pagos de compras de SAINT ± movimientos manuales. Así no se
+  desincroniza; para igualar con el banco se carga un ajuste.
+- Lo que pone un socio en una compra **no sale de la caja**: queda como lo
+  que SAINT le debe al socio. Cuando SAINT se lo devuelve, es una
+  "Devolución a un socio" (eso sí sale de la caja). "Retiro de ganancia" es
+  aparte y no reduce la deuda con el socio.
+- Cuenta según el medio de pago: **Efectivo → efectivo, todo lo demás →
+  Brubank** (transferencias, débito, el resumen de la tarjeta; las ventas web
+  entran por transferencia al alias). Por eso el control se hace contra la
+  parte Brubank, no contra el total.
+- Fechas: las elegidas en un formulario (medianoche UTC) se toman como ese
+  día; las que tienen hora real se pasan a hora argentina (`diaDe` en
+  `src/lib/caja.ts`).
+- **Migración:** las compras de contado cargadas antes del 2026-11-10 se dan
+  por pagadas por SAINT en su fecha (era lo que se asumía). Las en cuotas
+  (la bordadora) quedan con saldo abierto: hay que registrar las cuotas ya
+  pagadas desde Pagos ("Cuántas cuotas: 8", primera 01/04/2026). Las compras
+  que pagaron los socios hay que corregirlas: quitar el pago de SAINT y
+  cargar quién puso cuánto.
+- Si el SQL no está corrido, Compras sigue andando como antes (sin estado de
+  pago) y Caja avisa que falta. Cargar una compra con pago sí pide el SQL: se
+  chequea antes de guardar para no duplicar stock al reintentar.
+- El tablero (gastos por mes, rentabilidad) no cambia: mide lo devengado (la
+  compra entera en su fecha); la caja mide la plata que se movió.
+
+**Archivos:** `supabase/caja-socios.sql` (nuevo, **correrlo**),
+`src/lib/caja.ts`, `src/lib/caja-datos.ts`, `src/lib/gestion.ts`,
+`src/lib/types.ts`, `src/app/admin/gestion-actions.ts`,
+`src/app/admin/(panel)/caja/page.tsx`, `src/app/admin/(panel)/layout.tsx`,
+`src/app/admin/(panel)/compras/page.tsx`,
+`src/app/admin/(panel)/compras/nueva/page.tsx`,
+`src/components/admin/CajaPanel.tsx`,
+`src/components/admin/CompraPagosPanel.tsx`,
+`src/components/admin/CompraForm.tsx`, `src/components/admin/ComprasList.tsx`,
+`src/components/admin/MedioPagoCuotas.tsx`.
+
+### 2026-11-04 — Marketing: Reel de la visita del Papa León XIV
+
+**Pedido:** video de marketing para el merch de la visita del Papa León XIV
+(fotos en `MARKETING/Visita del papa`), lindo y respetuoso.
+
+**Cómo quedó:** Reel de 18 s en `SAINT_REEL_VENTA/VISITA_DEL_PAPA/` (con y sin
+precio, sin música y portada) + `LEEME.md` con copy, historias y notas.
+Escenas: aureola dorada que se dibuja ("El Papa viene a casa.") → primer plano
+del bordado → las 3 gorras (camel, arena, negra) → foto de las tres →
+remeras blanca y negra → cierre "Llevá la visita con vos." + DM + logo.
+
+**Decisiones:** tono sobrio (sin stickers ni humor, por respeto), paleta del
+bordado (azul marino, dorado, crema) y tipografía de la marca; música
+original 100 BPM (pad tipo coro, campanitas, campana en cada cambio). Versión
+principal sin precio porque no hay precio de remeras. No se dice "oficial" ni
+se menciona fecha de la visita. Recortes de gorras con rembg `birefnet-general`
+(el modelo por defecto las dejaba transparentes).
+
+**Archivos (fuera del repo):** `generador/papa.py`, `musica_papa.py`,
+`papa_preparar.py`, `recortes_papa/`. **SQL:** ninguno.
 
 ### 2026-11-03 — Filtro de cliente con buscador
 
@@ -360,5 +475,6 @@ manuales.
 
 - **Reels de venta:** generador en `SAINT_REEL_VENTA/generador/` (fuera del
   repo). Estilo que funciona: gorras enteras, todas las fotos, stickers /
-  polaroid, humor y ritmo; lo tierno y lento no.
+  polaroid, humor y ritmo; lo tierno y lento no. Excepción: el Reel de la
+  visita del Papa (`VISITA_DEL_PAPA/`, `papa.py`) es sobrio a propósito.
 - **Fotos:** `MARKETING/FOTOS DE GORRAS` (fuera del repo).

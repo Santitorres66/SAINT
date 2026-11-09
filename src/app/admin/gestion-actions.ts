@@ -9,7 +9,10 @@ import type {
   CobroInput,
   ActionResult,
   OrderItem,
+  ReparticionPago,
+  CuentaCaja,
 } from "@/lib/types";
+import { CONCEPTOS_CAJA, sumarMeses } from "@/lib/caja";
 
 /**
  * Server Actions del sistema de gestión: proveedores, compras, ventas
@@ -29,6 +32,7 @@ function revalidarGestion() {
   revalidatePath("/admin/ventas");
   revalidatePath("/admin/produccion");
   revalidatePath("/admin/cobranzas");
+  revalidatePath("/admin/caja");
   // El stock cambió → refrescamos la web pública
   revalidatePath("/");
   revalidatePath("/tienda");
@@ -275,6 +279,8 @@ export async function createCompra(input: {
   cuotas: number;
   monto_cuota: number;
   notas: string;
+  /** Lo que se pagó al cargarla y quién lo puso (SAINT o un socio). */
+  pagos?: ReparticionPago[];
 }): Promise<ActionResult> {
   if (!input.items?.length)
     return { error: "Agregá al menos un ítem a la compra." };
@@ -289,6 +295,26 @@ export async function createCompra(input: {
     (a, i) => a + i.cantidad * i.costo_unitario,
     0,
   );
+
+  const pagos = (input.pagos ?? []).filter((p) => Number(p.monto) > 0);
+  const pagado = pagos.reduce((a, p) => a + Number(p.monto), 0);
+  if (pagado > total + 0.01)
+    return {
+      error: "Lo que pusieron SAINT y los socios supera el total de la compra.",
+    };
+  // Se chequea ANTES de guardar la compra: si fallara después, la compra ya
+  // habría sumado stock y reintentar la duplicaría.
+  if (pagos.length) {
+    const { error: sinTabla } = await supabase
+      .from("compra_pagos")
+      .select("id")
+      .limit(1);
+    if (sinTabla)
+      return {
+        error:
+          "Para registrar quién pagó falta correr supabase/caja-socios.sql en Supabase.",
+      };
+  }
 
   const { data: compra, error } = await supabase
     .from("compras")
@@ -307,6 +333,17 @@ export async function createCompra(input: {
 
   if (error || !compra)
     return { error: `No se pudo guardar la compra: ${error?.message}` };
+
+  if (pagos.length)
+    await supabase.from("compra_pagos").insert(
+      pagos.map((p) => ({
+        compra_id: compra.id,
+        fecha: input.fecha || new Date().toISOString(),
+        monto: Number(p.monto),
+        socio_id: p.socio_id,
+        medio_pago: p.socio_id ? "" : (input.medio_pago?.trim() ?? ""),
+      })),
+    );
 
   // Sumar stock y actualizar costo SOLO para ítems de mercadería
   for (const it of input.items) {
@@ -448,6 +485,177 @@ export async function deleteCompra(id: string): Promise<ActionResult> {
 
   const { error } = await supabase.from("compras").delete().eq("id", id);
   if (error) return { error: `No se pudo eliminar: ${error.message}` };
+
+  revalidarGestion();
+  return { ok: true };
+}
+
+/* --------------------------- Pagos de compras ---------------------------- */
+
+/**
+ * Registra plata que salió hacia una compra: el pago de contado que faltaba,
+ * una cuota, o varias cuotas de una (una fila por cuota, mes a mes desde la
+ * fecha elegida, así la Caja las ve en el día en que se pagaron).
+ * `socio_id` null = lo pagó SAINT; si no, lo puso ese socio.
+ */
+export async function registrarPagoCompra(
+  compraId: string,
+  input: {
+    fecha: string;
+    monto: number;
+    cuotas: number;
+    socio_id: string | null;
+    medio_pago: string;
+    notas: string;
+  },
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const monto = Number(input.monto) || 0;
+  const cuotas = Math.max(Math.floor(Number(input.cuotas) || 1), 1);
+  if (monto <= 0) return { error: "El monto tiene que ser mayor a 0." };
+
+  const { data: compra } = await supabase
+    .from("compras")
+    .select("total, compra_pagos(monto)")
+    .eq("id", compraId)
+    .maybeSingle();
+  if (!compra) return { error: "No se encontró la compra." };
+
+  const pagado = ((compra.compra_pagos as { monto: number }[]) ?? []).reduce(
+    (a, p) => a + Number(p.monto),
+    0,
+  );
+  const saldo = Number(compra.total) - pagado;
+  if (monto * cuotas > saldo + 0.01)
+    return {
+      error: `Supera lo que falta pagar de la compra (${saldo.toFixed(2)}).`,
+    };
+
+  const primera = (input.fecha || new Date().toISOString()).slice(0, 10);
+  const { error } = await supabase.from("compra_pagos").insert(
+    Array.from({ length: cuotas }, (_, i) => ({
+      compra_id: compraId,
+      fecha: sumarMeses(primera, i),
+      monto,
+      socio_id: input.socio_id,
+      medio_pago: input.medio_pago?.trim() ?? "",
+      notas: input.notas?.trim() ?? "",
+    })),
+  );
+  if (error) return { error: `No se pudo registrar el pago: ${error.message}` };
+
+  revalidarGestion();
+  return { ok: true };
+}
+
+export async function deletePagoCompra(id: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { error } = await supabase.from("compra_pagos").delete().eq("id", id);
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
+
+  revalidarGestion();
+  return { ok: true };
+}
+
+/* --------------------------------- Caja ---------------------------------- */
+
+/**
+ * Movimiento de caja que no es un cobro ni un pago de compra. `monto` llega
+ * siempre positivo; el signo lo pone el concepto (o `sentido` en un ajuste).
+ * Un depósito de efectivo son dos filas: sale de efectivo y entra a Brubank,
+ * así el total no cambia.
+ */
+export async function registrarMovimientoCaja(input: {
+  fecha: string;
+  concepto: string;
+  cuenta: CuentaCaja;
+  monto: number;
+  sentido: 1 | -1;
+  socio_id: string | null;
+  notas: string;
+}): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const concepto = CONCEPTOS_CAJA.find((c) => c.value === input.concepto);
+  if (!concepto) return { error: "Elegí qué tipo de movimiento es." };
+  const monto = Math.abs(Number(input.monto) || 0);
+  if (monto <= 0) return { error: "El monto tiene que ser mayor a 0." };
+  if (concepto.socio && !input.socio_id)
+    return { error: "Elegí de qué socio es el movimiento." };
+
+  const base = {
+    fecha: input.fecha || new Date().toISOString(),
+    concepto: concepto.value,
+    socio_id: concepto.socio ? input.socio_id : null,
+    notas: input.notas?.trim() ?? "",
+  };
+  const filas =
+    concepto.value === "deposito"
+      ? [
+          { ...base, cuenta: "efectivo", monto: -monto },
+          { ...base, cuenta: "brubank", monto },
+        ]
+      : [
+          {
+            ...base,
+            cuenta: input.cuenta === "efectivo" ? "efectivo" : "brubank",
+            monto:
+              monto * (concepto.signo === 0 ? input.sentido : concepto.signo),
+          },
+        ];
+
+  const { error } = await supabase.from("caja_movimientos").insert(filas);
+  if (error)
+    return { error: `No se pudo registrar el movimiento: ${error.message}` };
+
+  revalidarGestion();
+  return { ok: true };
+}
+
+export async function deleteMovimientoCaja(id: string): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { data: mov } = await supabase
+    .from("caja_movimientos")
+    .select("concepto, created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (!mov) return { error: "No se encontró el movimiento." };
+
+  // Las dos patas de un depósito se cargaron juntas (mismo created_at): se
+  // borran juntas, si no queda plata apareciendo o desapareciendo de la nada.
+  const q = supabase.from("caja_movimientos").delete();
+  const { error } =
+    mov.concepto === "deposito"
+      ? await q.eq("concepto", "deposito").eq("created_at", mov.created_at)
+      : await q.eq("id", id);
+  if (error) return { error: `No se pudo eliminar: ${error.message}` };
+
+  revalidarGestion();
+  return { ok: true };
+}
+
+/** Deja asentado el saldo real de Brubank contra el que da el sistema. */
+export async function registrarControlCaja(input: {
+  saldo_real: number;
+  saldo_sistema: number;
+  notas: string;
+}): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Tu sesión expiró. Volvé a iniciar sesión." };
+
+  const { error } = await supabase.from("caja_controles").insert({
+    saldo_real: Number(input.saldo_real) || 0,
+    saldo_sistema: Number(input.saldo_sistema) || 0,
+    notas: input.notas?.trim() ?? "",
+  });
+  if (error) return { error: `No se pudo guardar el control: ${error.message}` };
 
   revalidarGestion();
   return { ok: true };

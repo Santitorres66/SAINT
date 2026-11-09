@@ -10,8 +10,9 @@ export const MEDIOS_PAGO = [
 ];
 
 /**
- * Medio de pago + cuotas (si es tarjeta de crédito). Pensado para reusarse
- * tal cual en compras y, más adelante, en el cobro de ventas.
+ * Medio de pago + cuotas. Las cuotas se ofrecen con cualquier medio, no solo
+ * con tarjeta: un proveedor también puede financiar en plazos (la bordadora
+ * se compró en 24 cuotas y se sigue pagando).
  */
 export default function MedioPagoCuotas({
   medioPago,
@@ -26,7 +27,6 @@ export default function MedioPagoCuotas({
   onCuotasChange: (v: string) => void;
   total: number;
 }) {
-  const esCredito = medioPago === "Tarjeta de crédito";
   const nCuotas = Number(cuotas) || 1;
   const montoCuota = nCuotas > 0 ? total / nCuotas : 0;
 
@@ -52,25 +52,23 @@ export default function MedioPagoCuotas({
         </select>
       </div>
 
-      {esCredito && (
-        <>
-          <div>
-            <label className={labelClase}>Cantidad de cuotas</label>
-            <input
-              type="number"
-              min="1"
-              value={cuotas}
-              onChange={(e) => onCuotasChange(e.target.value)}
-              className={inputClase}
-            />
-          </div>
-          <div>
-            <label className={labelClase}>Monto por cuota</label>
-            <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-base text-neutral-700">
-              {formatPrecio(montoCuota)}
-            </p>
-          </div>
-        </>
+      <div>
+        <label className={labelClase}>Cuotas / plazos</label>
+        <input
+          type="number"
+          min="1"
+          value={cuotas}
+          onChange={(e) => onCuotasChange(e.target.value)}
+          className={inputClase}
+        />
+      </div>
+      {nCuotas > 1 && (
+        <div>
+          <label className={labelClase}>Monto por cuota</label>
+          <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-base text-neutral-700">
+            {formatPrecio(montoCuota)}
+          </p>
+        </div>
       )}
     </div>
   );

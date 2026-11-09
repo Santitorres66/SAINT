@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Compra } from "@/lib/types";
+import type { Compra, Socio } from "@/lib/types";
 import { formatPrecio } from "@/lib/constants";
 import { deleteCompra } from "@/app/admin/gestion-actions";
+import CompraPagosPanel, { resumenPagos } from "./CompraPagosPanel";
 
 function formatFecha(iso: string) {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "medium" }).format(
@@ -19,11 +20,21 @@ const LABEL_TIPO: Record<string, string> = {
 };
 
 /** Listado de compras con opción de eliminar (revierte el stock). */
-export default function ComprasList({ compras }: { compras: Compra[] }) {
+export default function ComprasList({
+  compras,
+  socios,
+}: {
+  compras: Compra[];
+  socios: Socio[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [aBorrar, setABorrar] = useState<Compra | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Por id: tras registrar un pago la lista se refresca y el panel tiene
+  // que mostrar la compra nueva, no la que se abrió.
+  const [pagosDe, setPagosDe] = useState<string | null>(null);
+  const compraPagos = compras.find((c) => c.id === pagosDe) ?? null;
 
   function confirmarBorrado() {
     if (!aBorrar) return;
@@ -85,7 +96,16 @@ export default function ComprasList({ compras }: { compras: Compra[] }) {
                     {formatPrecio(c.monto_cuota)}
                   </p>
                 )}
+                <EstadoPago compra={c} />
                 <div className="mt-1 flex justify-end gap-3">
+                  {c.pagos && (
+                    <button
+                      onClick={() => setPagosDe(c.id)}
+                      className="text-xs font-medium text-neutral-900 hover:underline"
+                    >
+                      Pagos
+                    </button>
+                  )}
                   <Link
                     href={`/admin/compras/editar/${c.id}`}
                     className="text-xs font-medium text-neutral-600 hover:underline"
@@ -144,6 +164,14 @@ export default function ComprasList({ compras }: { compras: Compra[] }) {
         ))}
       </ul>
 
+      {compraPagos && (
+        <CompraPagosPanel
+          compra={compraPagos}
+          socios={socios}
+          onClose={() => setPagosDe(null)}
+        />
+      )}
+
       {aBorrar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
           <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
@@ -174,5 +202,38 @@ export default function ComprasList({ compras }: { compras: Compra[] }) {
         </div>
       )}
     </>
+  );
+}
+
+/** Pagada, cuotas que van, o lo que falta; y quién puso la plata si no fue solo SAINT. */
+function EstadoPago({ compra }: { compra: Compra }) {
+  if (!compra.pagos) return null;
+  const { pagado, saldo, cuotasPagadas } = resumenPagos(compra);
+  const socios = compra.pagos.some((p) => p.socio_id);
+
+  let texto: string;
+  let clase: string;
+  if (saldo <= 0.01) {
+    texto = "Pagada";
+    clase = "bg-emerald-50 text-emerald-700";
+  } else if (compra.cuotas > 1) {
+    texto = `Cuota ${cuotasPagadas}/${compra.cuotas} · falta ${formatPrecio(saldo)}`;
+    clase = "bg-amber-50 text-amber-800";
+  } else {
+    texto = pagado > 0 ? `Falta ${formatPrecio(saldo)}` : "Sin pagar";
+    clase = "bg-amber-50 text-amber-800";
+  }
+
+  return (
+    <p className="mt-1 flex flex-wrap justify-end gap-1.5">
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${clase}`}>
+        {texto}
+      </span>
+      {socios && (
+        <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+          Pusieron socios
+        </span>
+      )}
+    </p>
   );
 }

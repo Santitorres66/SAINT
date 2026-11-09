@@ -239,6 +239,59 @@ export interface Compra {
   notas: string;
   /** Nombre del proveedor (se completa al leer con join). */
   proveedor_nombre?: string | null;
+  /** Pagos hechos a esta compra (ver supabase/caja-socios.sql). */
+  pagos?: CompraPago[];
+}
+
+/* ------------------------------ Socios y caja ----------------------------- */
+
+export interface Socio {
+  id: string;
+  nombre: string;
+  dni: string;
+  activo: boolean;
+}
+
+/**
+ * Una salida de plata hacia una compra (contado, una cuota, o la parte que
+ * puso un socio). `socio_id` null = lo pagó SAINT, sale de la caja.
+ */
+export interface CompraPago {
+  id: string;
+  compra_id: string;
+  fecha: string;
+  monto: number;
+  socio_id: string | null;
+  medio_pago: string;
+  notas: string;
+}
+
+/** Lo que manda el formulario: quién pone cuánto al cargar una compra. */
+export interface ReparticionPago {
+  /** null = SAINT */
+  socio_id: string | null;
+  monto: number;
+}
+
+export type CuentaCaja = "brubank" | "efectivo";
+
+/** Movimiento manual de caja (aportes, devoluciones, gastos, ajustes…). */
+export interface CajaMovimiento {
+  id: string;
+  fecha: string;
+  cuenta: CuentaCaja;
+  concepto: string;
+  monto: number;
+  socio_id: string | null;
+  notas: string;
+}
+
+export interface CajaControl {
+  id: string;
+  fecha: string;
+  saldo_real: number;
+  saldo_sistema: number;
+  notas: string;
 }
 
 /* ------------------------------- Cobros ------------------------------- */

@@ -8,6 +8,8 @@ import type {
   Compra,
   CompraItem,
   TipoItemCompra,
+  Socio,
+  ReparticionPago,
 } from "@/lib/types";
 import {
   formatPrecio,
@@ -16,6 +18,7 @@ import {
 } from "@/lib/constants";
 import { createCompra, updateCompra } from "@/app/admin/gestion-actions";
 import { etiquetaProducto } from "@/lib/catalogo";
+import { SAINT } from "@/lib/caja";
 import Buscador from "./Buscador";
 import MedioPagoCuotas from "./MedioPagoCuotas";
 
@@ -66,10 +69,12 @@ function itemToLinea(it: CompraItem): Linea {
 export default function CompraForm({
   products,
   proveedores,
+  socios = [],
   initial,
 }: {
   products: Product[];
   proveedores: Proveedor[];
+  socios?: Socio[];
   initial?: Compra;
 }) {
   const esEdicion = Boolean(initial);
@@ -84,6 +89,11 @@ export default function CompraForm({
   const [notas, setNotas] = useState(initial?.notas ?? "");
   const [medioPago, setMedioPago] = useState(initial?.medio_pago ?? "");
   const [cuotas, setCuotas] = useState(String(initial?.cuotas ?? 1));
+  /* Quién pone la plata al cargar la compra. Mientras no se toque, todo lo
+     paga SAINT si es de contado, y nada si es en cuotas (las cuotas se van
+     registrando a medida que se pagan, desde Compras → Pagos). */
+  const [reparto, setReparto] = useState<Record<string, string>>({});
+  const [repartoTocado, setRepartoTocado] = useState(false);
   const lineaVacia = LINEA_VACIA;
   const [lineas, setLineas] = useState<Linea[]>(
     initial?.items?.length
@@ -142,6 +152,52 @@ export default function CompraForm({
 
   const total = lineas.reduce(
     (a, l) => a + (Number(l.cantidad) || 0) * (Number(l.costo_unitario) || 0),
+    0,
+  );
+
+  const nCuotasForm = Math.max(Number(cuotas) || 1, 1);
+  const pagadores = [
+    { id: SAINT, nombre: "SAINT (caja)" },
+    ...socios
+      .filter((s) => s.activo)
+      .map((s) => ({ id: s.id, nombre: s.nombre })),
+  ];
+  function montoDe(id: string): string {
+    if (repartoTocado) return reparto[id] ?? "";
+    if (id !== SAINT || nCuotasForm > 1 || total <= 0) return "";
+    return String(Math.round(total * 100) / 100);
+  }
+  function cambiarReparto(id: string, valor: string) {
+    // Al tocar uno se congelan los demás en lo que se estaba mostrando.
+    const base = Object.fromEntries(
+      pagadores.map((p) => [p.id, montoDe(p.id)]),
+    );
+    setReparto({ ...base, [id]: valor });
+    setRepartoTocado(true);
+  }
+  function repartirFijo(valores: Record<string, number>) {
+    setReparto(
+      Object.fromEntries(
+        pagadores.map((p) => [
+          p.id,
+          valores[p.id] ? String(valores[p.id]) : "",
+        ]),
+      ),
+    );
+    setRepartoTocado(true);
+  }
+  function mitadYMitad() {
+    const mitad = Math.round((total / 2) * 100) / 100;
+    const cadaSocio =
+      Math.round(((total - mitad) / (pagadores.length - 1)) * 100) / 100;
+    repartirFijo(
+      Object.fromEntries(
+        pagadores.map((p) => [p.id, p.id === SAINT ? mitad : cadaSocio]),
+      ),
+    );
+  }
+  const pagadoAhora = pagadores.reduce(
+    (a, p) => a + (Number(montoDe(p.id)) || 0),
     0,
   );
 
@@ -208,6 +264,22 @@ export default function CompraForm({
 
     const nCuotas = Number(cuotas) || 1;
 
+    if (!esEdicion && pagadoAhora > total + 0.01) {
+      setError(
+        `Entre SAINT y los socios suman ${formatPrecio(pagadoAhora)}, más que ` +
+          `el total de la compra (${formatPrecio(total)}).`,
+      );
+      return;
+    }
+    const pagos: ReparticionPago[] = esEdicion
+      ? []
+      : pagadores
+          .map((p) => ({
+            socio_id: p.id === SAINT ? null : p.id,
+            monto: Number(montoDe(p.id)) || 0,
+          }))
+          .filter((p) => p.monto > 0);
+
     const payload = {
       proveedor_id: proveedorId || null,
       fecha,
@@ -221,7 +293,7 @@ export default function CompraForm({
     startTransition(async () => {
       const res = esEdicion
         ? await updateCompra(initial!.id, payload)
-        : await createCompra(payload);
+        : await createCompra({ ...payload, pagos });
       if (res?.error) setError(res.error);
     });
   }
@@ -473,6 +545,91 @@ export default function CompraForm({
           onCuotasChange={setCuotas}
           total={total}
         />
+      </section>
+
+      {/* Quién paga */}
+      <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">
+            ¿De dónde sale la plata?
+          </h2>
+          {esEdicion ? (
+            <p className="mt-1 text-sm text-neutral-500">
+              Los pagos de esta compra (quién puso cuánto y las cuotas) se
+              manejan desde el botón <strong>Pagos</strong> en el listado de
+              compras.
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-neutral-500">
+              Lo que se paga hoy y quién lo pone. Lo de SAINT sale de la caja;
+              lo de un socio queda como aporte suyo.
+              {nCuotasForm > 1 &&
+                " En cuotas: dejalo en 0 y registrá cada cuota cuando se pague (o poné acá lo que ya se pagó)."}
+            </p>
+          )}
+        </div>
+
+        {!esEdicion && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {pagadores.map((p) => (
+                <div key={p.id}>
+                  <label className="mb-1 block text-xs text-neutral-500">
+                    {p.nombre}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={montoDe(p.id)}
+                    onChange={(e) => cambiarReparto(p.id, e.target.value)}
+                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                    placeholder="$ 0"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => repartirFijo({ [SAINT]: total })}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-100"
+              >
+                Todo SAINT
+              </button>
+              {pagadores.length > 1 && (
+                <button type="button" onClick={mitadYMitad} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-100">
+                  Mitad SAINT, mitad socios
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => repartirFijo({})}
+                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-100"
+              >
+                Nada todavía
+              </button>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2 border-t border-neutral-100 pt-4 text-sm">
+              <span className="text-neutral-500">
+                Pagado ahora:{" "}
+                <strong className="text-neutral-900">
+                  {formatPrecio(pagadoAhora)}
+                </strong>
+              </span>
+              {pagadoAhora > total + 0.01 ? (
+                <span className="font-medium text-red-700">
+                  Se pasa por {formatPrecio(pagadoAhora - total)}
+                </span>
+              ) : (
+                <span className="text-neutral-500">
+                  Queda a pagar:{" "}
+                  {formatPrecio(Math.max(total - pagadoAhora, 0))}
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </section>
 
       {/* Notas */}

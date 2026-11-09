@@ -1,13 +1,14 @@
 import Link from "next/link";
 import CompraForm from "@/components/admin/CompraForm";
 import { getAllProductsAdmin } from "@/lib/products";
-import { getProveedores } from "@/lib/gestion";
+import { getProveedores, getSocios } from "@/lib/gestion";
 
 /** Página para cargar una compra nueva. */
 export default async function NuevaCompraPage() {
-  const [products, proveedores] = await Promise.all([
+  const [products, proveedores, socios] = await Promise.all([
     getAllProductsAdmin(),
     getProveedores(),
+    getSocios(),
   ]);
 
   return (
@@ -35,7 +36,11 @@ export default async function NuevaCompraPage() {
           </Link>
         </div>
       ) : (
-        <CompraForm products={products} proveedores={proveedores} />
+        <CompraForm
+          products={products}
+          proveedores={proveedores}
+          socios={socios}
+        />
       )}
     </div>
   );
